@@ -36,10 +36,22 @@ jobs:
       - name: Report compile errors
         if: failure()
         run: |
-          grep -E "error:" build-sim.log | sort -u | head -60 | while IFS= read -r line; do
+          grep -E "error:" build-sim.log | sort -u | head -20 | while IFS= read -r line; do
             echo "::error::$line"
           done
-          grep -cE "error:" build-sim.log || true
+          echo "--- build-sim.log tail ---"
+          tail -n 30 build-sim.log | head -c 3000 | while IFS= read -r line; do
+            echo "::error::$line"
+          done
+          echo "--- diagnostics ---"
+          {
+            echo "PWD: $(pwd)"
+            echo "LS:"; ls -la | head -25
+            echo "XCODEGEN: $(xcodegen --version 2>&1)"
+            echo "PROJECT DIR:"; ls -la MiaoyuApp.xcodeproj 2>&1 | head -10
+          } | while IFS= read -r line; do
+            echo "::error::$line"
+          done
 
       # ---- 第二步：真机未签名 ipa（下载后用 Sideloadly/AltStore/爱思助手自签安装）----
       - name: Build unsigned device IPA
