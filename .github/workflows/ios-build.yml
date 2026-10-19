@@ -10,6 +10,8 @@ jobs:
   build:
     name: Build on macOS
     runs-on: macos-14
+    permissions:
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -52,6 +54,15 @@ jobs:
           } | while IFS= read -r line; do
             echo "::error::$line"
           done
+
+      # ---- 失败时把编译日志挂到 Release（公开仓库可匿名直接下载）----
+      - name: Upload log as release asset
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create ci-logs --title "CI build logs" --notes "auto-uploaded on failure" || true
+          gh release upload ci-logs build-sim.log --clobber || true
 
       # ---- 第二步：真机未签名 ipa（下载后用 Sideloadly/AltStore/爱思助手自签安装）----
       - name: Build unsigned device IPA
