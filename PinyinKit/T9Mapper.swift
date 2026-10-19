@@ -40,7 +40,7 @@ enum T9Mapper {
         return results
     }
 
-    private func dfs(_ digits: [Character], _ pos: Int, _ prefix: inout String, _ results: inout Set<String>) {
+    private static func dfs(_ digits: [Character], _ pos: Int, _ prefix: inout String, _ results: inout Set<String>) {
         if pos == digits.count {
             // 完整字母串必须能切成合法音节序列才算有效
             if PinyinSyllables.split(prefix) != nil {

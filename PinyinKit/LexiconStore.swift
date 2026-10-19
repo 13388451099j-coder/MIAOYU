@@ -38,8 +38,9 @@ final class LexiconStore {
         }
         do {
             let decoded = try JSONDecoder().decode(LexiconFile.self, from: data)
-            cached = (decoded.chars, decoded.words)
-            return cached
+            let result = (chars: decoded.chars, words: decoded.words)
+            cached = result
+            return result
         } catch {
             // 词库损坏时降级为空库，保证键盘可用
             cached = empty
