@@ -31,7 +31,7 @@ enum T9Mapper {
     private static let maxExpandDigits = 12
 
     /// 数字串 → 所有可能的、能构成合法音节序列的字母串集合。
-    func expand(digits: String) -> Set<String> {
+    static func expand(digits: String) -> Set<String> {
         let clean = digits.filter { T9Mapper.keyMap[$0] != nil }
         guard !clean.isEmpty, clean.count <= T9Mapper.maxExpandDigits else { return [] }
         var results = Set<String>()

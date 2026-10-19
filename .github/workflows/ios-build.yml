@@ -30,10 +30,20 @@ jobs:
             -destination 'generic/platform=iOS Simulator' \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGN_IDENTITY="" \
-            build
+            build 2>&1 | tee build-sim.log
+
+      # ---- 失败时把编译错误行转成注解（Actions 页面/API 可直接读到）----
+      - name: Report compile errors
+        if: failure()
+        run: |
+          grep -E "error:" build-sim.log | sort -u | head -60 | while IFS= read -r line; do
+            echo "::error::$line"
+          done
+          grep -cE "error:" build-sim.log || true
 
       # ---- 第二步：真机未签名 ipa（下载后用 Sideloadly/AltStore/爱思助手自签安装）----
       - name: Build unsigned device IPA
+        if: success()
         run: |
           set -o pipefail
           xcodebuild -project MiaoyuApp.xcodeproj \
@@ -42,14 +52,23 @@ jobs:
             -destination 'generic/platform=iOS' \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGN_IDENTITY="" \
-            build
+            build 2>&1 | tee build-device.log
           APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -path '*Build/Products/Release-iphoneos/*.app' | head -n 1)
           echo "APP_PATH=$APP_PATH" >> "$GITHUB_ENV"
           mkdir -p Payload
           cp -R "$APP_PATH" Payload/
           zip -qry MiaoyuApp-unsigned.ipa Payload
 
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: build-*.log
+          if-no-files-found: warn
+
       - name: Upload simulator app
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: MiaoyuApp-simulator
@@ -57,6 +76,7 @@ jobs:
           if-no-files-found: warn
 
       - name: Upload unsigned IPA
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: MiaoyuApp-unsigned-ipa
