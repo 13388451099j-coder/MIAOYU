@@ -1,0 +1,56 @@
+name: MiaoyuApp
+options:
+  bundleIdPrefix: com.miaoyu
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: 1
+    CODE_SIGN_STYLE: Automatic
+    DEVELOPMENT_TEAM: ""
+targets:
+  MiaoyuApp:
+    type: application
+    platform: iOS
+    sources:
+      - path: MiaoyuApp
+      - path: SharedKit
+      - path: PinyinKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.miaoyu.zuiti
+        PRODUCT_NAME: 妙语
+        INFOPLIST_FILE: MiaoyuApp/Info.plist
+        CODE_SIGN_ENTITLEMENTS: MiaoyuApp/MiaoyuApp.entitlements
+        TARGETED_DEVICE_FAMILY: "1"
+        INFOPLIST_KEY_CFBundleDisplayName: 妙语
+    dependencies:
+      - target: MiaoyuKeyboard
+        embed: true
+  MiaoyuKeyboard:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: MiaoyuKeyboard
+      - path: SharedKit
+      - path: PinyinKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.miaoyu.zuiti.keyboard
+        PRODUCT_NAME: 妙语键盘
+        INFOPLIST_FILE: MiaoyuKeyboard/Info.plist
+        CODE_SIGN_ENTITLEMENTS: MiaoyuKeyboard/MiaoyuKeyboard.entitlements
+        TARGETED_DEVICE_FAMILY: "1"
+schemes:
+  MiaoyuApp:
+    build:
+      targets:
+        MiaoyuApp: all
+        MiaoyuKeyboard: [all]
+    run:
+      config: Debug
+    test:
+      config: Debug

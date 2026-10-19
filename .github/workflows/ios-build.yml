@@ -1,0 +1,64 @@
+name: iOS Build
+
+# 触发：推送到 main/master，或在 GitHub 页面手动触发（Actions → iOS Build → Run workflow）
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build on macOS
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install xcodegen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      # ---- 第一步：模拟器构建（验证编译通过，无需证书）----
+      - name: Build for Simulator (no signing)
+        run: |
+          set -o pipefail
+          xcodebuild -project MiaoyuApp.xcodeproj \
+            -scheme MiaoyuApp \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build
+
+      # ---- 第二步：真机未签名 ipa（下载后用 Sideloadly/AltStore/爱思助手自签安装）----
+      - name: Build unsigned device IPA
+        run: |
+          set -o pipefail
+          xcodebuild -project MiaoyuApp.xcodeproj \
+            -scheme MiaoyuApp \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build
+          APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -path '*Build/Products/Release-iphoneos/*.app' | head -n 1)
+          echo "APP_PATH=$APP_PATH" >> "$GITHUB_ENV"
+          mkdir -p Payload
+          cp -R "$APP_PATH" Payload/
+          zip -qry MiaoyuApp-unsigned.ipa Payload
+
+      - name: Upload simulator app
+        uses: actions/upload-artifact@v4
+        with:
+          name: MiaoyuApp-simulator
+          path: ~/Library/Developer/Xcode/DerivedData/**/Build/Products/Debug-iphonesimulator/*.app
+          if-no-files-found: warn
+
+      - name: Upload unsigned IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: MiaoyuApp-unsigned-ipa
+          path: MiaoyuApp-unsigned.ipa
+          if-no-files-found: error
