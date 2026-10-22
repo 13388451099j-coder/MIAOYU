@@ -5,6 +5,8 @@ struct MeView: View {
 
     /// 键盘完全访问状态（onAppear 刷新）
     @State private var fullAccess: Bool = false
+    /// App Group 共享容器是否可用（自签免费证书不支持 App Groups）
+    @State private var sharedContainerOK: Bool = true
 
     /// 应用版本号（读取 Info.plist）
     private var appVersion: String {
@@ -13,6 +15,21 @@ struct MeView: View {
         let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion")
             as? String ?? "1"
         return "\(short) (\(build))"
+    }
+
+    /// 权限状态三态：自签没有 App Group 时读不到键盘上报的值，显示「无法检测」而不是「未开启」
+    private var accessText: String {
+        if !sharedContainerOK { return "无法检测" }
+        return fullAccess ? "已开启" : "未开启"
+    }
+
+    private var accessIcon: String {
+        if !sharedContainerOK { return "questionmark.shield.fill" }
+        return fullAccess ? "checkmark.shield.fill" : "exclamationmark.shield.fill"
+    }
+
+    private var accessColor: Color {
+        return sharedContainerOK && fullAccess ? .green : .orange
     }
 
     var body: some View {
@@ -25,16 +42,23 @@ struct MeView: View {
                     Label("键盘安装引导", systemImage: "keyboard")
                 }
                 HStack {
-                    Label(
-                        "键盘完全访问",
-                        systemImage: fullAccess
-                            ? "checkmark.shield.fill"
-                            : "exclamationmark.shield.fill"
-                    )
-                    .foregroundStyle(fullAccess ? Color.green : Color.orange)
+                    Label("键盘完全访问", systemImage: accessIcon)
+                        .foregroundStyle(accessColor)
                     Spacer()
-                    Text(fullAccess ? "已开启" : "未开启")
+                    Text(accessText)
                         .foregroundStyle(.secondary)
+                }
+                // App Groups 是自签免费证书的硬限制：没有它，键盘写不进主 App 读得到的地方，
+                // 这一行就永远「未开启」。说清楚原因，别让用户以为是开关没点。
+                if !sharedContainerOK {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("共享容器不可用（自签限制）")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.orange)
+                        Text("当前安装方式用普通 Apple ID 自签，免费证书不支持 App Groups：主 App 与键盘各自存各自的数据，完全访问状态、快捷短语、直播识别结果都无法互通。要用完整功能需付费开发者账号签名（或在 Xcode 里用付费 Team 直接运行）。")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
 
@@ -90,6 +114,7 @@ struct MeView: View {
         .navigationTitle("我的")
         .onAppear {
             fullAccess = AppGroup.keyboardHasFullAccess
+            sharedContainerOK = AppGroup.isSharedContainerAvailable
         }
     }
 }

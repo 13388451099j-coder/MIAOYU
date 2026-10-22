@@ -36,6 +36,10 @@
 另：**首次识别很慢**（中文识别模型首次编译）。所以扩展在 `broadcastStarted` 就写空快照当心跳，
 App/键盘立刻显示「监听中」，不等首帧出活。
 
+另：广播扩展的 `Info.plist` 必须带 `RPBroadcastProcessMode = RPBroadcastProcessModeSampleBuffer`
+（放在 `NSExtension` 字典里），否则系统不会把视频帧喂给 `processSampleBuffer`——现象是广播开始了、
+录屏指示也在，但一帧都识别不到。Xcode 的 Broadcast Upload 模板默认自带这个键，手写 plist 很容易漏。
+
 ## 三、真机测试步骤（模拟器测不了广播链路）
 
 模拟器上系统广播面板永远不弹（系统不支持广播上传扩展），iOS 26 起合成事件也不触发系统面板，
@@ -79,3 +83,5 @@ App/键盘立刻显示「监听中」，不等首帧出活。
 - [ ] 快照带 App 名 / 会话名，避免把不相干画面当对话（目前靠会话门控 + 用户别乱切）
 - [ ] 本工程在 Windows 产出、**未做过 Xcode 编译验证**：首次在 Mac 上构建若报错，
       优先查 project.yml 的 target membership 与三份 entitlements
+- ⚠️ **自签免费证书下这条链路不通**：广播扩展写快照、键盘读快照都走 App Group，
+  而 App Groups 需要付费开发者账号。免费自签时装得上但键盘永远显示「未在直播监听」（见 `TROUBLESHOOT.md` E3）。

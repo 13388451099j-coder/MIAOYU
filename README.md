@@ -35,7 +35,10 @@ open MiaoyuApp.xcodeproj       # Xcode 打开，选真机/模拟器 Run
 
 首次需在 Xcode → Signing & Capabilities 确认团队并启用 App Groups（`group.com.miaoyu.zuiti`）。
 **三个 target（MiaoyuApp / MiaoyuKeyboard / MiaoyuLive）必须同一 Team 签名**，否则 App Group 共享不生效、直播模式读不到快照。
+⚠️ **App Groups 需要付费开发者账号**：普通 Apple ID 自签（爱思助手 / Sideloadly / AltStore 的免费证书）不支持，
+这种装法下主 App 与键盘各存各的数据，「键盘完全访问」状态、快捷短语、直播快照都不会互通（见 `TROUBLESHOOT.md` E3）。
 键盘启用路径：设置 → 通用 → 键盘 → 键盘 → 添加新键盘 → 妙语 → 允许完全访问（AI 联网/剪贴板/直播快照都需要）。
+改过键盘扩展的 Info.plist 后，要先把旧键盘从系统列表里删掉再重新添加，系统才会重读扩展配置。
 
 ## 目录
 
@@ -43,15 +46,20 @@ open MiaoyuApp.xcodeproj       # Xcode 打开，选真机/模拟器 Run
 project.yml          xcodegen 工程描述（三个 target）
 SharedKit/           双端共享（主App+键盘）：模型、AI 服务、各 Store（Swift 源码直挂两个 target）
 PinyinKit/           拼音引擎（纯 Swift）+ 正式词库 lexicon.json（2.67万单字+9.6万词组，由 mozillazg MIT 数据生成，见 REFERENCES.md）
+                     词库异步加载（后台解码 + 后台建索引），键盘扩展另挂精简词库：
+PinyinKit/ResourcesKeyboard/  键盘专用词库（前 4 万词组 + 全部单字，2.25MB），由 tools/build-keyboard-lexicon.mjs 生成
 LiveKit/             直播模式共享层：快照模型 + 对话解析 + App Group 存储 + OCR 引擎。
                      刻意不依赖 SharedKit/SwiftUI——要挂进 ~50MB 内存上限的广播扩展
-MiaoyuApp/           主 App（SwiftUI），含「直播模式」页
+MiaoyuApp/           主 App（SwiftUI），含「直播模式」页与 Assets.xcassets（AppIcon 由脚本生成）
 MiaoyuKeyboard/      键盘扩展（UIInputViewController + SwiftUI）
 MiaoyuLive/          ReplayKit 广播上传扩展（录屏 → 本地 OCR → 快照）
-tools/build-lexicon.mjs   词库转换脚本（原始数据在 tools/lexicon-src/）
+tools/build-lexicon.mjs           词库转换脚本（原始数据在 tools/lexicon-src/）
+tools/build-keyboard-lexicon.mjs  从完整词库裁出键盘扩展用的精简词库
+tools/make-app-icon.ps1           生成 AppIcon 全套 PNG（与安卓端图标同一套图形）
+tools/swift-brace-check.mjs       粗粒度括号配平检查（Windows 上没 Xcode 时的兜底）
 ```
 
-直播模式怎么用、有哪些硬约束，见 `LIVE_MODE.md`。
+直播模式怎么用、有哪些硬约束，见 `LIVE_MODE.md`；真机自签常见问题与已修缺陷见 `TROUBLESHOOT.md`。
 
 ## 安全约定
 

@@ -105,3 +105,54 @@ jobs:
           name: MiaoyuApp-unsigned-ipa
           path: MiaoyuApp-unsigned.ipa
           if-no-files-found: error
+
+      # ---- 安装级自检：这三样都真机翻车过，别靠人肉发现 ----
+      # ① 图标有没有编进 Assets.car；② 键盘扩展在不在包里、RequestsOpenAccess 是不是 true
+      # （不是 true 时系统设置里根本不显示「允许完全访问」）；③ 键盘包里有没有精简词库
+      # （没有的话中文候选永远为空，键盘看起来「能按但不出字」）。
+      # 放在上传之后：自检失败把这次运行标红，但产物已经能下载。
+      - name: Verify IPA payload (icon / keyboard extension / lexicon)
+        if: success()
+        run: |
+          set -u
+          fail=0
+          APP=$(find Payload -maxdepth 1 -name '*.app' | head -n 1)
+          echo "APP=$APP"
+
+          if [ -f "$APP/Assets.car" ]; then
+            echo "OK  Assets.car 存在（图标已编译）"
+          else
+            echo "::error::包内缺 Assets.car，图标又被漏编了（装到手机就是白方块）"
+            fail=1
+          fi
+
+          ICON=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconName' "$APP/Info.plist" 2>/dev/null || true)
+          echo "CFBundleIconName=${ICON:-<空>}"
+          [ -n "$ICON" ] || { echo "::error::Info.plist 缺 CFBundleIconName"; fail=1; }
+
+          KB=""
+          for appex in "$APP"/PlugIns/*.appex; do
+            [ -d "$appex" ] || continue
+            point=$(/usr/libexec/PlistBuddy -c 'Print :NSExtension:NSExtensionPointIdentifier' "$appex/Info.plist" 2>/dev/null || true)
+            echo "appex: $(basename "$appex") -> ${point:-<未知>}"
+            if [ "$point" = "com.apple.keyboard-service" ]; then KB="$appex"; fi
+          done
+
+          if [ -n "$KB" ]; then
+            RA=$(/usr/libexec/PlistBuddy -c 'Print :NSExtension:NSExtensionAttributes:RequestsOpenAccess' "$KB/Info.plist" 2>/dev/null || echo '<缺>')
+            echo "RequestsOpenAccess=$RA"
+            [ "$RA" = "true" ] || { echo "::error::键盘扩展 RequestsOpenAccess 不是 true，设置里不会出现「允许完全访问」开关"; fail=1; }
+            if [ -f "$KB/lexicon.json" ]; then
+              echo "OK  键盘词库 $(du -h "$KB/lexicon.json" | cut -f1)"
+            else
+              echo "::error::键盘包里没有 lexicon.json，中文候选永远出不来"
+              fail=1
+            fi
+          else
+            echo "::error::包内没有键盘扩展（PlugIns 里找不到 com.apple.keyboard-service）"
+            fail=1
+          fi
+
+          echo "--- ipa 结构 ---"
+          unzip -l MiaoyuApp-unsigned.ipa | head -30
+          exit $fail

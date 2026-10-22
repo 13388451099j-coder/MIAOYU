@@ -23,6 +23,13 @@ struct CandidateBarView: View {
                         .font(.system(size: 12))
                         .foregroundStyle(KeyboardTheme.secondaryForeground.opacity(0.8))
                     Spacer()
+                } else if !context.lexiconReady {
+                    // 词库还在后台解码：不要给出可点的原字母按钮，
+                    // 否则用户一点就把拼音字母上屏了（词库就绪后会自动补出候选）
+                    Text("词库加载中…")
+                        .font(.system(size: 12))
+                        .foregroundStyle(KeyboardTheme.secondaryForeground.opacity(0.8))
+                    Spacer()
                 } else {
                     // 有组合但无候选：原字母串兜底按钮，点击原样上屏
                     Button {

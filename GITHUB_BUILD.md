@@ -77,3 +77,11 @@ git push -u origin main
 - **构建报 Swift 语法错**：Windows 端没编译过，首次 CI 可能暴露少量语法/类型问题，按日志改完 push 即可，改动会自动触发重跑。
 - **模拟器 destination 报错**：工作流用的是 `generic/platform=iOS Simulator`，不依赖具体机型，一般不会遇到。
 - **签名相关报错**：工作流已设 `CODE_SIGNING_ALLOWED=NO`，不会碰证书；若改动了 workflow 注意保留这两行。
+- **键盘装上了，但设置里没有「允许完全访问」**：扩展的 `Info.plist` 里 `RequestsOpenAccess` 必须在
+  `NSExtensionAttributes` 字典内（已修）。改过 plist 后要把旧键盘从「设置 → 通用 → 键盘 → 键盘」删掉再重新添加，
+  系统才会重读扩展配置。
+- **主 App 里「键盘完全访问」永远未开启 / 直播模式读不到内容**：普通 Apple ID 自签（免费证书）不支持 App Groups，
+  主 App 与键盘/广播扩展无法共享数据。这是签名限制，不是代码 bug；换付费开发者账号签名才能打通
+  （详见 `TROUBLESHOOT.md` E3）。
+- **装完 App 没有图标**：仓库已带 `MiaoyuApp/Assets.xcassets/AppIcon.appiconset`（由 `tools/make-app-icon.ps1` 生成）；
+  若仍显示白图标，检查 `project.yml` 里 `ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon` 是否被删掉。

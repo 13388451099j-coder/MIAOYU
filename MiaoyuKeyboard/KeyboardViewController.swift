@@ -90,7 +90,15 @@ final class KeyboardViewController: UIInputViewController {
                         dismiss: { [weak self] in
                             self?.dismissKeyboard()
                         })
-        // 上报完全访问状态：主 App 的「键盘完全访问」与直播模式引导都读这个值
-        AppGroup.reportKeyboardFullAccess(hasFullAccess)
+        // 上报完全访问状态：主 App 的「键盘完全访问」与直播模式引导都读这个值。
+        // 只在值变化时写：注入在 viewDidLoad / viewDidAppear / textWillChange 都会跑，
+        // 每次键都写一遍 App Group UserDefaults 是白白的跨进程同步开销。
+        if lastReportedFullAccess != hasFullAccess {
+            lastReportedFullAccess = hasFullAccess
+            AppGroup.reportKeyboardFullAccess(hasFullAccess)
+        }
     }
+
+    /// 上次上报过的完全访问状态（nil = 还没报过）
+    private var lastReportedFullAccess: Bool?
 }

@@ -2,6 +2,13 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- 主 App 与键盘扩展共用同一个钥匙串访问组，否则扩展读不到主 App 存的 API Key
+	     （默认访问组按 bundle id 区分，扩展与宿主 App 不互通）。
+	     新条目会落到数组第一项，所以两个 target 都只声明这一个组。 -->
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(AppIdentifierPrefix)com.miaoyu.zuiti</string>
+	</array>
 	<key>com.apple.security.application-groups</key>
 	<array>
 		<string>group.com.miaoyu.zuiti</string>

@@ -16,6 +16,15 @@ enum AppGroup {
         UserDefaults(suiteName: identifier) ?? .standard
     }
 
+    /// App Group 容器是否真的可用（entitlement 生效）。
+    ///
+    /// 自签免费 Apple ID **不支持 App Groups**：这种装法下系统不会给共享容器，
+    /// 主 App 与键盘各写各的 UserDefaults，快捷短语 / 完全访问状态 / 直播快照全部读不到。
+    /// 显式暴露这个状态，UI 才能告诉用户「为什么键盘明明开着完全访问，这里还显示未开启」。
+    static var isSharedContainerAvailable: Bool {
+        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: identifier) != nil
+    }
+
     /// 键盘是否拥有完全访问权限。
     /// 键盘侧在 `hasFullAccess` 变化时调用 `reportKeyboardFullAccess(_:)` 写入；主 App 侧读该值
     /// 用于安装引导展示，主 App 进程内并不真正持有键盘权限，读到的只是键盘上报的快照。

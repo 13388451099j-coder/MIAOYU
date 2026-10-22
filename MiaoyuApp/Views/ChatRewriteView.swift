@@ -100,6 +100,13 @@ struct ChatRewriteView: View {
     @State private var showingStrategies = false
     @State private var isLoadingStrategies = false
 
+    // 键盘「完全访问」状态：只有 App Group 可用时才能读到键盘上报的值
+    @State private var keyboardFullAccess: Bool = false
+    @State private var sharedContainerOK: Bool = true
+    /// 提示条被手动关掉的标记（存标准 UserDefaults，与 App Group 无关）
+    @State private var fullAccessHintDismissed: Bool =
+        UserDefaults.standard.bool(forKey: "miaoyu.banner.fullAccess.dismissed.v1")
+
     // MARK: 计算属性
 
     private var trimmedInput: String {
@@ -131,6 +138,7 @@ struct ChatRewriteView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            fullAccessHint
             personaBar
             Divider()
             messageList
@@ -153,6 +161,50 @@ struct ChatRewriteView: View {
         }
         .sheet(isPresented: $showingStrategies) {
             strategySheet
+        }
+    }
+
+    /// 顶部「完全访问」提示条：只在没检测到权限时出现，可手动关掉。
+    /// 没开完全访问时键盘的 AI 面板只能显示引导卡片，先让用户看见这件事。
+    @ViewBuilder
+    private var fullAccessHint: some View {
+        if !fullAccessHintDismissed && !keyboardFullAccess {
+            HStack(spacing: 8) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.caption)
+                    .foregroundStyle(Color.orange)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(sharedContainerOK
+                         ? "键盘还没开启「完全访问」"
+                         : "请在系统设置里打开「允许完全访问」")
+                        .font(.caption.weight(.semibold))
+                    Text(sharedContainerOK
+                         ? "开启后键盘的 AI 面板才能联网改写"
+                         : "自签安装读不到键盘权限：设置 → 通用 → 键盘 → 妙语键盘")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+                Spacer(minLength: 4)
+                Button("去开启") {
+                    KeyboardSettings.open()
+                }
+                .font(.caption.weight(.semibold))
+                .buttonStyle(.borderless)
+
+                Button {
+                    fullAccessHintDismissed = true
+                    UserDefaults.standard.set(true, forKey: "miaoyu.banner.fullAccess.dismissed.v1")
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(Color.orange.opacity(0.12))
         }
     }
 
@@ -335,6 +387,8 @@ struct ChatRewriteView: View {
     private func handleAppear() {
         personas = PersonaStore.shared.all()
         activePersonaId = PersonaStore.shared.active.id
+        keyboardFullAccess = AppGroup.keyboardHasFullAccess
+        sharedContainerOK = AppGroup.isSharedContainerAvailable
         if !appState.pendingRewriteText.isEmpty {
             inputText = appState.pendingRewriteText
             appState.pendingRewriteText = ""

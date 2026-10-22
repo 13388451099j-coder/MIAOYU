@@ -2,6 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- 与主 App 同一个钥匙串访问组：键盘扩展要读主 App 填的 API Key。
+	     没有这条时扩展只能读到自己的默认组，AI 面板会一直报「尚未配置 API Key」。 -->
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(AppIdentifierPrefix)com.miaoyu.zuiti</string>
+	</array>
 	<key>com.apple.security.application-groups</key>
 	<array>
 		<string>group.com.miaoyu.zuiti</string>

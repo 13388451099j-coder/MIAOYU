@@ -59,6 +59,21 @@ final class KeyboardContext: ObservableObject {
     /// 拼音引擎：字母追加 / 退格 / 候选查询 / 候选上屏消费
     private let engine = PinyinEngine()
 
+    /// 词库是否就绪（后台解码完成）。键盘扩展里词库是异步解码的，
+    /// 未就绪时候选条显示「词库加载中」而不是把用户敲的字母当成候选。
+    @Published private(set) var lexiconReady: Bool = false
+
+    init() {
+        // 键盘一出现就让引擎在后台解词库：4.8MB / 12 万条，主线程解要 1 秒以上，
+        // 首字母按下去会整个键盘冻住（真机就是这个症状）。预热后用户敲第一个字母时通常已就绪。
+        engine.onLexiconReady = { [weak self] in
+            guard let self else { return }
+            self.lexiconReady = true
+            self.syncFromEngine()
+        }
+        engine.prepare()
+    }
+
     /// T9 当前数字串（键盘侧自行维护，映射成字母路径后喂给 engine）
     private var t9Digits: String = ""
 

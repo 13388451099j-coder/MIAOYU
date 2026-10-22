@@ -41,10 +41,22 @@ final class PinyinEngine {
     private var wordIndex: [String: [Int]] = [:]
     /// 归一化读音 → 单字下标
     private var charIndex: [String: [Int]] = [:]
-    private var loaded = false
+    /// 词库是否已就绪（后台解码完成）。未就绪时 rebuild 只清候选，不阻塞主线程。
+    private(set) var isLexiconReady = false
+    /// 是否已经发起过后台加载（防重复）
+    private var loadRequested = false
+
+    /// 词库就绪回调（主线程）。键盘层用它把「词库加载中」换成真实候选。
+    var onLexiconReady: (() -> Void)?
 
     init(lexicon: LexiconStore = .shared) {
         self.lexicon = lexicon
+    }
+
+    /// 预热：键盘一出现就发起后台解码，用户敲第一个字母时通常已经就绪。
+    /// 不预热也能用——第一次按键会触发同一个后台加载，只是候选会晚几百毫秒出现。
+    func prepare() {
+        startLoadingIfNeeded()
     }
 
     // MARK: 输入操作
@@ -87,7 +99,16 @@ final class PinyinEngine {
     // MARK: 内部：重建切分与候选
 
     private func rebuild() {
-        ensureLoaded()
+        // 词库在后台解码（4.8MB / 12 万条，主线程解会把键盘冻住数秒）。
+        // 解码期间保持空候选：候选条据 isLexiconReady 显示「词库加载中」，
+        // 用户已敲的字母留在 rawInput 里，就绪后由 onLexiconReady 触发重算。
+        guard isLexiconReady else {
+            startLoadingIfNeeded()
+            syllables = []
+            prefixEnd = []
+            candidates = []
+            return
+        }
         if rawInput.isEmpty {
             syllables = []
             prefixEnd = []
@@ -233,19 +254,47 @@ final class PinyinEngine {
 
     // MARK: 加载与建索引
 
-    private func ensureLoaded() {
-        guard !loaded else { return }
-        loaded = true
-        let data = lexicon.load()
-        chars = data.chars
-        words = data.words
+    /// 发起后台解码（只发一次）。索引也在后台建，最后回主线程一次性换上并通知键盘。
+    ///
+    /// 索引为什么要放后台：12 万条词条每条都要跑一遍 fuzzyKey（多次字符串替换），
+    /// 在主线程做同样是秒级卡顿——只是把「解码卡顿」换成了「建索引卡顿」。
+    private func startLoadingIfNeeded() {
+        guard !isLexiconReady, !loadRequested else { return }
+        loadRequested = true
+        lexicon.loadAsync { [weak self] data in
+            // LexiconStore 保证回调在主线程
+            guard let self else { return }
+            DispatchQueue.global(qos: .utility).async {
+                let index = Self.makeIndexes(chars: data.chars, words: data.words)
+                DispatchQueue.main.async {
+                    self.chars = data.chars
+                    self.words = data.words
+                    self.charIndex = index.chars
+                    self.wordIndex = index.words
+                    self.isLexiconReady = true
+                    self.loadRequested = false
+                    self.rebuild()          // 用真词库把用户在加载期间敲的字母重新算一遍
+                    self.onLexiconReady?()
+                }
+            }
+        }
+    }
+
+    /// 建桶索引：词组按归一化首音节、单字按归一化读音（纯函数，在后台线程跑）。
+    private static func makeIndexes(chars: [LexiconEntry],
+                                    words: [LexiconEntry]) -> (chars: [String: [Int]], words: [String: [Int]]) {
+        var charIndex: [String: [Int]] = [:]
+        var wordIndex: [String: [Int]] = [:]
+        charIndex.reserveCapacity(1024)
+        wordIndex.reserveCapacity(1024)
         for (i, e) in chars.enumerated() {
-            charIndex[Self.fuzzyKey(e.p), default: []].append(i)
+            charIndex[fuzzyKey(e.p), default: []].append(i)
         }
         for (i, e) in words.enumerated() {
             if let first = e.p.split(separator: " ").first {
-                wordIndex[Self.fuzzyKey(String(first)), default: []].append(i)
+                wordIndex[fuzzyKey(String(first)), default: []].append(i)
             }
         }
+        return (charIndex, wordIndex)
     }
 }

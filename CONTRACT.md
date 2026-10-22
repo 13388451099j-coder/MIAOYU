@@ -23,6 +23,10 @@ enum AppGroup {
     static var keyboardHasFullAccess: Bool { get }   // 读 defaults.bool(forKey: "kb_full_access")
     /// 键盘侧上报完全访问状态（主 App「我的」页据此显示；此前只有读端没有写端）
     static func reportKeyboardFullAccess(_ value: Bool)
+    /// App Group 容器是否真的可用（entitlement 生效）。
+    /// 自签免费 Apple ID 不支持 App Groups，此时为 false：UI 必须显式提示，
+    /// 否则「键盘完全访问：未开启」会被误认为开关没点。
+    static var isSharedContainerAvailable: Bool { get }
 }
 ```
 
@@ -195,6 +199,10 @@ final class QuickPhraseStore {
 - `Keyboards/SymbolKeyboardView.swift`：两页符号网格（常用中文标点、数字行、`#+=` 页），点击直接上屏。
 - `Keyboards/EnglishKeyboardView.swift`：26 键英文布局，直接 insertText 小写（shift 大写）。
 - `Panels/CandidateBarView.swift`：横向滚动候选（文字大按钮），第一个候选高亮；空候选时显示原拼音串。点击候选 → `KeyboardContext.selectCandidate` → 经 textDocumentProxy 上屏。
+  词库后台解码期间（`context.lexiconReady == false`）显示「词库加载中…」，不给可点的原字母按钮。
+- `Info.plist`（**易错点**）：`RequestsOpenAccess` / `IsASCIICapable` / `PrefersRightToLeft` / `PrimaryLanguage`
+  必须写在 `NSExtension` → `NSExtensionAttributes` 字典里。直接写在 `NSExtension` 下会被系统忽略，
+  设置里不出现「允许完全访问」开关，`hasFullAccess` 恒 false。改完需把键盘从系统列表删掉再重新添加。
 - `Panels/AiCardPanelView.swift`：AI 卡片面板，三个输入来源共用一套候选展示 ——
   ① 直播（读屏）：每 2 秒轮询 `LiveScreenStore.load()`，把「对方最新一条」与至多两条更早的消息列成按钮，
      点击调 `AiService.replyCandidates`；无广播时显示开启指引（键盘扩展不能拉起宿主 App，只给文字指路）；
@@ -214,6 +222,12 @@ struct Candidate: Equatable { var text: String; var pinyin: String; var score: D
 
 final class PinyinEngine {
     init(lexicon: LexiconStore = .shared)
+    /// 预热词库（键盘一出现就调用）：后台解码 + 后台建索引，不阻塞主线程
+    func prepare()
+    /// 词库是否已就绪；未就绪时 append/backspace 只维护 rawInput，候选为空
+    var isLexiconReady: Bool { get }
+    /// 就绪回调（主线程）：键盘据此把「词库加载中」换成真实候选
+    var onLexiconReady: (() -> Void)?
     func append(letter: Character)      // 只接受 a-z，其余忽略
     func backspace()                    // 删一个字母；组合空则无操作
     func reset()                        // 清空组合与候选
@@ -226,6 +240,10 @@ final class PinyinEngine {
 }
 ```
 实现要点：先把 rawInput 做音节切分（声母表 + 韵母表贪心/DP 切分），再按切分序列匹配词库（单字 + 词组），词组匹配要求各字拼音与切分音节一致（支持 zh/z、ch/c、sh/s、ü=v、in/ing 等模糊容错可加分但非必须）。排序 score = 词频 + 句长奖励（贪心组句：整串或最长前缀成词优先）。
+
+**加载必须异步**：词库 4.8MB / 12 万条，`JSONDecoder` 解码与 `fuzzyKey` 建索引都是秒级，
+主线程做会把整个键盘冻住（真机实测首字母按下即卡住）。解码在 `LexiconStore` 的后台队列，
+建索引在 `PinyinEngine` 的后台队列，就绪后回主线程一次性换上并重算当前 rawInput。
 
 ### `PinyinKit/T9Mapper.swift`
 ```swift
@@ -241,8 +259,14 @@ enum T9Mapper {
 ```swift
 struct LexiconEntry: Codable { var h: String; var p: String; var f: Int }   // 汉字 / 拼音(空格分隔音节) / 频率0-9999
 final class LexiconStore {
+    typealias Lexicon = (chars: [LexiconEntry], words: [LexiconEntry])
     static let shared = LexiconStore()
-    func load() -> (chars: [LexiconEntry], words: [LexiconEntry])   // 首次 load 后缓存
+    /// 主入口：后台解码一次，完成后回主线程回调；已加载则立即回调（仍在主线程）
+    func loadAsync(completion: @escaping (Lexicon) -> Void)
+    /// 是否已解码完成（候选条据此显示「词库加载中」）
+    var isLoaded: Bool { get }
+    /// 同步加载：只能在后台线程调用（主线程会冻住键盘）
+    func load() -> Lexicon
     static func resourceURL() -> URL?   // Bundle.main 的 lexicon.json
 }
 ```
@@ -251,6 +275,11 @@ final class LexiconStore {
 { "version": 1, "chars": [ {"h":"我","p":"wo","f":9900} ], "words": [ {"h":"你好","p":"ni hao","f":8000} ] }
 ```
 规模要求：**chars ≥ 600 个高频字（含全部常用音节覆盖），words ≥ 1200 条高频二字/三字词**（口语词优先：你好/好的/在吗/可以/不是/哈哈/明天/喜欢/吃饭/工作……）。这是演示级词库，文件里注明 version 字段便于日后替换正式词库。
+
+**键盘扩展挂精简词库**：`project.yml` 里键盘 target 排除了 `PinyinKit/Resources/lexicon.json`，
+改挂 `PinyinKit/ResourcesKeyboard/lexicon.json`（前 4 万词组 + 全部单字，2.25MB，由
+`tools/build-keyboard-lexicon.mjs` 从完整词库生成）。原因同上：扩展进程内存上限只有几十 MB。
+两份词库同名 `lexicon.json`，各在自己的 Bundle 里，`LexiconStore.resourceURL()` 无需区分。
 
 ### `PinyinKit/PinyinSyllables.swift`（内部辅助）
 声母/韵母常量表 + `func split(_ raw: String) -> [String]?` 音节切分（贪心 + 回溯）。

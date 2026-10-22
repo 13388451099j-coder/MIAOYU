@@ -22,12 +22,25 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>NSExtension</key>
 	<dict>
+		<!-- RequestsOpenAccess / PrimaryLanguage / IsASCIICapable 必须放在
+		     NSExtensionAttributes 里。之前直接写在 NSExtension 下是无效的：
+		     系统读不到 RequestsOpenAccess，设置里就不会出现「允许完全访问」开关，
+		     键盘的 hasFullAccess 永远是 false（AI 面板只剩引导卡片）。 -->
+		<key>NSExtensionAttributes</key>
+		<dict>
+			<key>IsASCIICapable</key>
+			<true/>
+			<key>PrefersRightToLeft</key>
+			<false/>
+			<key>PrimaryLanguage</key>
+			<string>zh-Hans</string>
+			<key>RequestsOpenAccess</key>
+			<true/>
+		</dict>
 		<key>NSExtensionPointIdentifier</key>
 		<string>com.apple.keyboard-service</string>
 		<key>NSExtensionPrincipalClass</key>
 		<string>$(PRODUCT_MODULE_NAME).KeyboardViewController</string>
-		<key>RequestsOpenAccess</key>
-		<true/>
 	</dict>
 </dict>
 </plist>

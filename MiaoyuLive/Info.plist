@@ -26,6 +26,11 @@
 		<string>com.apple.broadcast-services-upload</string>
 		<key>NSExtensionPrincipalClass</key>
 		<string>$(PRODUCT_MODULE_NAME).LiveBroadcastHandler</string>
+		<!-- 声明本扩展要处理 CMSampleBuffer。Xcode 的 Broadcast Upload 模板自带这个键；
+		     缺了它，系统不会把视频帧喂给 processSampleBuffer（App Store 校验也会报缺），
+		     表现就是「广播开始了但一帧都识别不到」。 -->
+		<key>RPBroadcastProcessMode</key>
+		<string>RPBroadcastProcessModeSampleBuffer</string>
 	</dict>
 </dict>
 </plist>
