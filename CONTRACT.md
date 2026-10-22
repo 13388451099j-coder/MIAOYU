@@ -21,6 +21,8 @@ enum AppGroup {
     static var defaults: UserDefaults { get }
     /// 键盘是否拥有完全访问权限（键盘侧调用 hasFullAccess 判断；主 App 侧恒 false 意义）
     static var keyboardHasFullAccess: Bool { get }   // 读 defaults.bool(forKey: "kb_full_access")
+    /// 键盘侧上报完全访问状态（主 App「我的」页据此显示；此前只有读端没有写端）
+    static func reportKeyboardFullAccess(_ value: Bool)
 }
 ```
 
@@ -115,6 +117,10 @@ final class AiService {
     func rewrite(userInput: String, persona: Persona?, history: [ChatMessage] = []) async throws -> String
     /// 沟通三策略：对对方消息给出 3 种风格回复（严格 JSON 数组输出并解析，失败抛 AiServiceError）
     func communicationStrategies(for incomingMessage: String, persona: Persona?) async throws -> [StrategyResult]
+    /// 直播 / 剪贴板来源的候选回复：message = 对方最新一条（可多行合并），
+    /// context = 前文（带「对方：/我：」前缀，只影响语气、不逐条回应）；count 默认 3。
+    /// 输出形状与 communicationStrategies 相同（StrategyResult JSON 数组），temperature 0.9。
+    func replyCandidates(message: String, context: String?, persona: Persona?, count: Int = 3) async throws -> [StrategyResult]
     /// 连接测试：发一句 ping，返回模型回复文本
     func testConnection() async throws -> String
 }
@@ -189,7 +195,12 @@ final class QuickPhraseStore {
 - `Keyboards/SymbolKeyboardView.swift`：两页符号网格（常用中文标点、数字行、`#+=` 页），点击直接上屏。
 - `Keyboards/EnglishKeyboardView.swift`：26 键英文布局，直接 insertText 小写（shift 大写）。
 - `Panels/CandidateBarView.swift`：横向滚动候选（文字大按钮），第一个候选高亮；空候选时显示原拼音串。点击候选 → `KeyboardContext.selectCandidate` → 经 textDocumentProxy 上屏。
-- `Panels/AiCardPanelView.swift`：AI 卡片面板 =「润色本条」「沟通三策略」两个入口；对 textDocumentProxy 文档前文 `documentContextBeforeInput` 取最近一条消息作为输入；无完全访问时显示引导开启的提示卡片。结果列表点击 → 上屏替换。调 SharedKit `AiService`。
+- `Panels/AiCardPanelView.swift`：AI 卡片面板，三个输入来源共用一套候选展示 ——
+  ① 直播（读屏）：每 2 秒轮询 `LiveScreenStore.load()`，把「对方最新一条」与至多两条更早的消息列成按钮，
+     点击调 `AiService.replyCandidates`；无广播时显示开启指引（键盘扩展不能拉起宿主 App，只给文字指路）；
+  ② 润色本条：取 `documentContextBeforeInput` 最后一段改写后替换原文；
+  ③ 沟通三策略：同样取输入框文字，给 3 条候选直接插入（不动原文）；
+  无完全访问时整面板显示引导；上屏只走 `sendToProxy` / `replaceChars`，发送永远由用户按。
 - `Panels/QuickPhrasePanelView.swift`：读 `QuickPhraseStore` 网格展示，点击 insertText 上屏。
 - `Panels/StickerPanelView.swift`：表情/颜文字网格（内置 ~40 条文本颜文字与 emoji 组合），点击上屏。
 - `KeyboardTheme.swift`：浅色/暗色自适应配色 + 按键尺寸常量。
@@ -244,3 +255,81 @@ final class LexiconStore {
 ### `PinyinKit/PinyinSyllables.swift`（内部辅助）
 声母/韵母常量表 + `func split(_ raw: String) -> [String]?` 音节切分（贪心 + 回溯）。
 - 只依赖契约自身；不改 SharedKit / 键盘 / 主 App 任何文件。
+
+## 模块 E：`LiveKit/`（直播模式共享层，编译进主 App / 键盘 / 广播扩展三个 target）
+
+**刻意不依赖 SharedKit / PinyinKit / SwiftUI**：广播扩展有 ~50MB 内存上限（jetsam 硬杀），
+只允许挂数据与 OCR 代码。App Group 标识在本模块自带一份常量，须与 `SharedKit/AppGroup.identifier` 一致。
+
+### `LiveKit/LiveSnapshot.swift`（数据 + 解析 + 存储，三 target 都要）
+```swift
+struct LiveLine: Codable, Equatable {
+    enum Side: String, Codable { case them, me, system }
+    var side: Side
+    var text: String
+}
+
+struct LiveScreenSnapshot: Codable, Equatable {
+    var updatedAt: Date          // 心跳：扩展每 2 秒落盘
+    var changedAt: Date          // 画面内容最后一次变化（主 App 防抖用）
+    var lines: [LiveLine]
+    var frameCount: Int
+    var recent: [String]         // 跨帧累积的对方消息（新→旧，模糊去重，封顶 6）
+    var latestIncoming: String?  // 尾部连续的对方气泡合并；最后一屏全是自己发的则 nil
+    var contextText: String?     // latestIncoming 之前 14 行 / 600 字，带「对方：/我：」前缀
+}
+
+enum LiveChatParser {
+    struct Observation { var text: String; var boundingBox: CGRect }
+    static func parse(_ observations: [Observation]) -> [LiveLine]   // 清洗 → 聚行 → 按 midX 定左右
+    static func incomingClusters(in lines: [LiveLine]) -> [String]
+    static func looksLikeConversation(_ lines: [LiveLine]) -> Bool    // 双侧气泡同框 = 会话
+    static func extendsConversation(_ current: [LiveLine], previous: [LiveLine]) -> Bool
+    static func normalizedForDedup(_ s: String) -> String
+    static func areSameMessage(_ a: String, _ b: String) -> Bool
+    static func levenshtein(_ a: String, _ b: String) -> Int
+}
+
+enum LiveScreenStore {
+    static let snapshotKey = "miaoyu.live.snapshot.v1"
+    static let freshWindow: TimeInterval = 150
+    static func save(_ snapshot: LiveScreenSnapshot)
+    static func load() -> LiveScreenSnapshot?
+    static func mergingRecent(existing: [String], found: [String], cap: Int = 6) -> [String]
+    static func isFresh(_ snapshot: LiveScreenSnapshot) -> Bool
+    static var isActionable: Bool      // 新鲜 + 有 latestIncoming
+    static var isListening: Bool       // 快照新鲜（广播活着）
+    static func setKeyboardPanel(fraction: Double)         // 键盘上报占屏比例（带时间戳，20s 过期）
+    static func keyboardPanelFraction(maxAge: TimeInterval = 20) -> Double
+    static func setAppLiveVisible(_ visible: Bool)         // 主 App 直播页在前台（5s 过期）
+    static func appLiveVisible(maxAge: TimeInterval = 5) -> Bool
+    static func diag(_ line: String); static func loadDiag() -> String
+}
+```
+
+### `LiveKit/LiveOCREngine.swift`（仅主 App + 广播扩展；键盘不挂，免得白占内存）
+```swift
+enum LiveOCREngine {
+    static func regionOfInterest(bottomCut: CGFloat = 0.14) -> CGRect
+    static func recognize(pixelBuffer: CVPixelBuffer, bottomCut: CGFloat = 0.14) -> [LiveLine]
+    static func recognize(cgImage: CGImage) -> [LiveLine]   // 自检页复用同一条路径
+}
+```
+实现要点：Vision `.accurate` 档（`.fast` 对中文几乎全瞎）+ `["zh-Hans","en-US"]`；
+NV12 帧先用 vImage 把 plane0 缩到 720 宽灰度再识别；识别全程 `autoreleasepool`。
+
+## 模块 F：`MiaoyuLive/`（ReplayKit 广播上传扩展）
+- `LiveBroadcastHandler.swift`：`RPBroadcastSampleHandler` 子类。`broadcastStarted` 立刻写空快照当心跳；
+  `processSampleBuffer` 每 2 秒识别一帧（阻塞回调队列 = ReplayKit 自动丢帧，即节流），
+  会话门控后写快照。**不做任何 LLM 调用**（内存上限 + 后台无法保活）。
+- `Info.plist`：`NSExtensionPointIdentifier = com.apple.broadcast-services-upload`，
+  `NSExtensionPrincipalClass = $(PRODUCT_MODULE_NAME).LiveBroadcastHandler`。
+- `MiaoyuLive.entitlements`：App Group `group.com.miaoyu.zuiti`。
+- project.yml 里 bundle id 固定 `com.miaoyu.zuiti.live`，主 App 的
+  `BroadcastPickerView.preferredExtension` 必须与它逐字一致。
+
+## 跨模块红线（直播模式）
+- **发送永远由人按**：本工程只做「读屏 → 出候选 → 插入输入框」，不模拟回车、不碰宿主 App 发送按钮。
+- **LLM 调用只在主 App 与键盘**，广播扩展里出现网络请求即视为违约。
+- 会话门控不得放宽成「逐 App 白名单」：iOS 不给扩展前台 App 信息，靠门控（双侧气泡）收口。
+- OCR 文本只在用户触发分析时发往用户自配的端点；自动分析默认关闭、仅前台生效。

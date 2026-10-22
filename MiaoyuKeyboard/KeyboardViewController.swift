@@ -44,6 +44,34 @@ final class KeyboardViewController: UIInputViewController {
         injectContext()
     }
 
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        // 键盘占屏比例上报给广播扩展：扩展据此抬高底部裁剪，避免把键盘面板本身
+        // （上面显示着上一轮的待回消息）OCR 进快照，形成「按钮文本被当成对方消息」的自反馈。
+        reportPanelFraction()
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        // 键盘收起：清零，让广播扩展恢复默认底部裁剪
+        lastReportedFraction = -1
+        LiveScreenStore.setKeyboardPanel(fraction: 0)
+    }
+
+    /// 上次上报的占屏比例：布局回调很频繁，值没变就别反复写 UserDefaults（跨进程同步有成本）
+    private var lastReportedFraction: Double = -1
+
+    /// 上报本键盘高度占整屏的比例（0…1）。窗口还没挂上时跳过，下次布局再报。
+    /// 注意不能用 `UIApplication.shared`——键盘是扩展，该符号在扩展里编译期不可用。
+    private func reportPanelFraction() {
+        let screenHeight = (view.window?.windowScene?.screen ?? UIScreen.main).bounds.height
+        guard screenHeight > 0, view.bounds.height > 0 else { return }
+        let fraction = Double(min(1, view.bounds.height / screenHeight))
+        guard abs(fraction - lastReportedFraction) > 0.005 else { return }
+        lastReportedFraction = fraction
+        LiveScreenStore.setKeyboardPanel(fraction: fraction)
+    }
+
     override func textWillChange(_ textInput: UITextInput?) {
         super.textWillChange(textInput)
         // 焦点切换可能换 proxy 实例，重新注入保证闭包捕获最新代理
@@ -62,5 +90,7 @@ final class KeyboardViewController: UIInputViewController {
                         dismiss: { [weak self] in
                             self?.dismissKeyboard()
                         })
+        // 上报完全访问状态：主 App 的「键盘完全访问」与直播模式引导都读这个值
+        AppGroup.reportKeyboardFullAccess(hasFullAccess)
     }
 }

@@ -14,9 +14,12 @@
 | 键盘内 AI 卡片 | 润色 / 沟通三策略（需键盘"完全访问"） | AiCardPanel |
 | 快捷短语 | 主 App 管理，键盘内一键上屏 | QuickPhraseMetaStore |
 | 截图识别 | 手动选截图 → Vision OCR → AI 改写（iOS 无自动截屏） | ScreenCaptureService + ML Kit（降级） |
+| 直播模式（读屏免复制） | ReplayKit 广播扩展 → 本地 Vision OCR → 按气泡分「我方/对方」→ 键盘与主 App 直接出候选 | 无障碍读聊天（iOS 无对应 API，改用录屏+OCR 等效实现） |
 | 历史 | 本地会话历史 | ConversationStore |
 
-**iOS 平台硬限制（有意不做，非缺失）**：系统悬浮窗、跨 App 读聊天（无障碍）、键盘内扫码 —— iOS 无对应系统 API（详见母仓库 `CROSSPLATFORM_REFACTOR_DESIGN.md` §4）。
+**iOS 平台硬限制（有意不做，非缺失）**：系统悬浮窗、跨 App 无障碍读取控件树 —— iOS 无对应 API。
+「跨 App 读聊天」改由**直播模式**实现：ReplayKit 广播扩展拿全屏帧、本机 Vision OCR，
+不注入任何 App、不读别人的数据库（详见 `LIVE_MODE.md`）。
 
 ## Mac 上构建
 
@@ -31,18 +34,24 @@ open MiaoyuApp.xcodeproj       # Xcode 打开，选真机/模拟器 Run
 完整步骤见 `GITHUB_BUILD.md`（含未签名 ipa 自签安装真机的方法）。
 
 首次需在 Xcode → Signing & Capabilities 确认团队并启用 App Groups（`group.com.miaoyu.zuiti`）。
-键盘启用路径：设置 → 通用 → 键盘 → 键盘 → 添加新键盘 → 妙语 → 允许完全访问（AI 联网/剪贴板需要）。
+**三个 target（MiaoyuApp / MiaoyuKeyboard / MiaoyuLive）必须同一 Team 签名**，否则 App Group 共享不生效、直播模式读不到快照。
+键盘启用路径：设置 → 通用 → 键盘 → 键盘 → 添加新键盘 → 妙语 → 允许完全访问（AI 联网/剪贴板/直播快照都需要）。
 
 ## 目录
 
 ```
-project.yml          xcodegen 工程描述
+project.yml          xcodegen 工程描述（三个 target）
 SharedKit/           双端共享（主App+键盘）：模型、AI 服务、各 Store（Swift 源码直挂两个 target）
 PinyinKit/           拼音引擎（纯 Swift）+ 正式词库 lexicon.json（2.67万单字+9.6万词组，由 mozillazg MIT 数据生成，见 REFERENCES.md）
-tools/build-lexicon.mjs   词库转换脚本（原始数据在 tools/lexicon-src/）
-MiaoyuApp/           主 App（SwiftUI）
+LiveKit/             直播模式共享层：快照模型 + 对话解析 + App Group 存储 + OCR 引擎。
+                     刻意不依赖 SharedKit/SwiftUI——要挂进 ~50MB 内存上限的广播扩展
+MiaoyuApp/           主 App（SwiftUI），含「直播模式」页
 MiaoyuKeyboard/      键盘扩展（UIInputViewController + SwiftUI）
+MiaoyuLive/          ReplayKit 广播上传扩展（录屏 → 本地 OCR → 快照）
+tools/build-lexicon.mjs   词库转换脚本（原始数据在 tools/lexicon-src/）
 ```
+
+直播模式怎么用、有哪些硬约束，见 `LIVE_MODE.md`。
 
 ## 安全约定
 

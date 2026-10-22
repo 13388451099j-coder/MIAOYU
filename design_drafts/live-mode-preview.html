@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>妙语 iOS · 直播模式效果图（读屏免复制）</title>
+<style>
+/* ================= 设计规范（沿用 ui-drafts-v2）=================
+   键盘：键区底 #D1D4D9 / 白键 + 功能键 #AEB3BE / 圆角 5.5 / 键高 43
+   App：insetGrouped 圆角 10 / 大标题 34 / 分隔线 #C6C6C8
+   直播模式新增：状态绿 #34C759 / 主色强调 #007AFF / 自报状态用胶囊
+:================================================================ */
+:root{
+  --blue:#007AFF; --bg:#F2F2F7; --card:#FFF; --text:#000; --sub:#8E8E93;
+  --sep:#C6C6C8; --green:#34C759; --red:#FF3B30; --orange:#FF9500;
+  --kbd-bg:#D1D4D9; --kbd-key:#FFFFFF; --kbd-fn:#AEB3BE; --kbd-shadow:#8A8A8E;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-font-smoothing:antialiased}
+body{background:#15171C;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;color:#E8E8ED;padding:30px 30px 60px}
+h1{font-size:22px;font-weight:700;margin-bottom:6px}
+.note{font-size:12.5px;color:#9A9DA6;line-height:1.8;margin-bottom:24px;max-width:1180px}
+.note b{color:#E8E8ED}
+.note code{background:#23262D;padding:1px 5px;border-radius:4px;font-size:11.5px;color:#B9BEC9}
+.wall{display:flex;flex-wrap:wrap;gap:34px;align-items:flex-start}
+.board{display:flex;flex-direction:column;gap:9px}
+.tag{font-size:13px;font-weight:700;color:#fff}
+.params{font-size:10.5px;color:#84878F;line-height:1.65;max-width:393px}
+.params b{color:#B9BEC9}
+
+/* ---------------- 手机外框 ---------------- */
+.phone{width:393px;height:852px;background:var(--bg);border:10px solid #0A0A0C;border-radius:54px;
+  overflow:hidden;position:relative;box-shadow:0 22px 55px rgba(0,0,0,.6)}
+.island{position:absolute;top:11px;left:50%;transform:translateX(-50%);width:112px;height:30px;
+  background:#0A0A0C;border-radius:18px;z-index:9}
+.hb{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);width:128px;height:5px;
+  border-radius:3px;background:rgba(60,60,67,.45);z-index:9}
+.sb{height:48px;display:flex;justify-content:space-between;align-items:flex-end;padding:0 30px 5px;
+  font-size:14px;font-weight:600;color:var(--text)}
+.sb .r{display:flex;gap:5px;align-items:center;font-size:12px}
+.scr{height:calc(100% - 48px);display:flex;flex-direction:column;color:var(--text);overflow:hidden}
+
+/* ---------------- 聊天背景（宿主 App）---------------- */
+.chatnav{height:44px;display:flex;align-items:center;gap:8px;padding:0 12px;
+  background:rgba(247,247,247,.94);border-bottom:.5px solid rgba(60,60,67,.29);flex:none}
+.chatnav .bk{color:var(--blue);font-size:19px}
+.chatnav .nm{font-size:16px;font-weight:600}
+.chatnav .dots{margin-left:auto;color:var(--blue);font-size:17px}
+.chat{flex:1;padding:12px 14px 6px;display:flex;flex-direction:column;gap:9px;overflow:hidden;
+  background:#EDEDED}
+.time{text-align:center;font-size:11px;color:var(--sub);margin:2px 0 4px}
+.bu,.ba{max-width:74%;padding:8px 12px;border-radius:17px;font-size:15.5px;line-height:1.42}
+.bu{background:#95EC69;color:#000;margin-left:auto;border-bottom-right-radius:5px}
+.ba{background:#fff;color:#000;border-bottom-left-radius:5px;box-shadow:0 0 0 .5px rgba(0,0,0,.04)}
+.rd{font-size:10px;color:var(--sub);text-align:right;margin-top:-4px}
+.ibar{display:flex;gap:8px;align-items:center;padding:7px 10px;background:#F7F7F7;
+  border-top:.5px solid rgba(60,60,67,.29);flex:none}
+.ibar .f{flex:1;background:#fff;border:.5px solid #D5D5D8;border-radius:16px;padding:7px 12px;
+  font-size:14px;color:var(--sub)}
+.ibar .ic{width:28px;height:28px;border-radius:14px;display:flex;align-items:center;
+  justify-content:center;font-size:15px;color:#5A5A5F;flex:none}
+
+/* ---------------- 妙语键盘 ---------------- */
+.kb{flex:none;background:var(--kbd-bg);border-top:.5px solid #B8BCC3}
+.topbar{height:30px;display:flex;align-items:center;gap:12px;padding:0 10px}
+.logo{font-size:13px;font-weight:700;color:var(--blue)}
+.tools{display:flex;gap:11px;margin-left:auto;font-size:12px;color:#3C3C43}
+.tools .on{color:var(--blue);font-weight:600}
+.tools .gl{font-size:14px}
+.panelhead{height:30px;display:flex;align-items:center;gap:7px;padding:0 10px}
+.panelhead .bk{font-size:11.5px;color:#3C3C43}
+.panelhead .tt{font-size:13px;font-weight:600}
+.panelsep{height:.5px;background:rgba(60,60,67,.22)}
+
+/* 直播目标卡片 */
+.livecard{margin:8px 12px 0;padding:9px 10px;background:#E4E6EA;border-radius:10px}
+.livecard .hd{display:flex;align-items:center;gap:4px;font-size:10.5px;color:#5C5C61}
+.dot{width:6px;height:6px;border-radius:3px;background:var(--green);display:inline-block}
+.dot.off{background:#B0B3B8}
+.livecard .hd .r{margin-left:auto;font-size:9.5px;color:#8E8E93}
+.tgt{margin-top:6px;padding:7px 8px;background:#fff;border-radius:8px;display:flex;gap:6px;
+  align-items:flex-start;font-size:12px;line-height:1.35}
+.tgt .ic{font-size:11px;flex:none;margin-top:1px}
+.tgt.primary{color:var(--blue);font-weight:600}
+.tgt.older{color:#1C1C1E;background:rgba(255,255,255,.66);font-weight:400}
+.tgt .tx{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.hint{font-size:10.5px;color:#5C5C61;line-height:1.45;margin-top:6px}
+
+/* 输入框来源入口 */
+.entrywrap{margin:10px 12px 0;display:flex;flex-direction:column;gap:7px}
+.entrycap{font-size:10.5px;color:#5C5C61;text-align:center}
+.entryrow{display:flex;gap:9px}
+.entry{flex:1;background:#E4E6EA;border-radius:10px;padding:12px 0;text-align:center;color:var(--blue)}
+.entry .i{font-size:19px;display:block;margin-bottom:4px}
+.entry .t{font-size:12px;font-weight:500}
+
+/* 候选结果 */
+.sourcebar{font-size:10.5px;color:#5C5C61;padding:8px 12px 0;line-height:1.4}
+.cand{margin:7px 12px 0;padding:9px 10px;background:#E4E6EA;border-radius:10px}
+.cand .ct{font-size:11.5px;font-weight:600;color:var(--blue);margin-bottom:3px}
+.cand .cc{font-size:13.5px;line-height:1.4;color:#111}
+.backbtn{text-align:center;font-size:11.5px;color:var(--blue);padding:9px 0}
+
+/* ---------------- 主 App（Form 风格）---------------- */
+.nav{height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;flex:none}
+.nav .b{color:var(--blue);font-size:16px}
+.nav .t{font-size:17px;font-weight:600}
+.nav .a{color:var(--blue);font-size:16px}
+.bigtitle{font-size:32px;font-weight:700;padding:2px 20px 12px;letter-spacing:.2px;flex:none}
+.form{flex:1;overflow:hidden;padding-bottom:6px}
+.grp{background:var(--card);border-radius:10px;margin:0 16px 18px;overflow:hidden}
+.grp .hd{font-size:12.5px;color:var(--sub);padding:0 32px 6px;text-transform:none}
+.row{display:flex;align-items:center;gap:11px;padding:11px 15px;border-bottom:.5px solid var(--sep)}
+.row:last-child{border-bottom:none}
+.row .ic{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;
+  justify-content:center;font-size:14px;color:#fff;flex:none}
+.row .tt{font-size:15.5px;flex:1;line-height:1.3}
+.row .dd{font-size:14px;color:var(--sub)}
+.row .cv{color:#C7C7CC;font-size:13px;font-weight:600}
+.foot{font-size:11.5px;color:var(--sub);line-height:1.6;padding:7px 32px 0}
+.statusrow{padding:12px 15px;display:flex;gap:10px;align-items:flex-start;border-bottom:.5px solid var(--sep)}
+.statusrow .sicon{font-size:19px;color:var(--green);flex:none;margin-top:1px}
+.statusrow .stt{font-size:14.5px;font-weight:600}
+.statusrow .ssub{font-size:11.5px;color:var(--sub);margin-top:2px;line-height:1.4}
+.pill{display:inline-block;font-size:10px;color:#fff;background:var(--green);border-radius:8px;
+  padding:1px 6px;margin-left:5px;vertical-align:1px}
+.pill.gray{background:#B0B3B8}
+.bcast{display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 0 4px}
+.bcast .btn{width:52px;height:52px;border-radius:26px;background:#fff;box-shadow:0 0 0 .5px #D5D5D8,
+  display:flex;align-items:center;justify-content:center;font-size:22px;color:var(--red)}
+.bcast .cap{font-size:11px;color:var(--sub)}
+.sectcap{font-size:11.5px;color:var(--sub);padding:11px 32px 5px;line-height:1.6}
+.bubblerow{display:flex;padding:6px 15px}
+.bubblerow.me{justify-content:flex-end}
+.bb{max-width:74%;padding:7px 11px;border-radius:15px;font-size:14px;line-height:1.4}
+.bubblerow .bb.them{background:#E9E9EB;border-bottom-left-radius:5px}
+.bubblerow.me .bb{background:var(--blue);color:#fff;border-bottom-right-radius:5px}
+.toreply{display:flex;gap:6px;padding:9px 15px 12px;font-size:12.5px;color:#1C1C1E;
+  background:#F6F6F9;border-top:.5px solid var(--sep)}
+.toreply .ic{color:var(--blue);font-size:11px;margin-top:1px}
+.switch{margin-left:auto;width:44px;height:26px;border-radius:13px;background:#E9E9EB;position:relative;flex:none}
+.switch i{position:absolute;top:2px;left:2px;width:22px;height:22px;border-radius:11px;background:#fff;
+  box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.tbar{margin-top:auto;background:rgba(249,249,249,.9);border-top:.5px solid rgba(60,60,67,.29);
+  display:flex;padding:6px 0 22px;flex:none}
+.tb{flex:1;text-align:center;font-size:10px;color:var(--sub)}
+.tb.on{color:var(--blue)}
+.tb .i{font-size:21px;display:block;margin-bottom:1px}
+
+/* 自检对照 */
+.selftest{padding:10px 15px 12px;display:flex;flex-direction:column;gap:8px}
+.fakeimg{width:100%;border-radius:8px;background:#f2f2f2;border:.5px solid #E2E2E5;padding:8px;
+  display:flex;flex-direction:column;gap:6px}
+.fk-time{text-align:center;font-size:9px;color:#9A9DA6}
+.fk{max-width:78%;font-size:10.5px;padding:5px 8px;border-radius:9px;line-height:1.35}
+.fk.them{background:#fff;border-bottom-left-radius:3px;box-shadow:0 0 0 .5px #E2E2E5}
+.fk.me{background:#95EC69;margin-left:auto;border-bottom-right-radius:3px}
+.ocrlist{font-family:ui-monospace,Menlo,monospace;font-size:10.5px;line-height:1.75;color:#3C3C43}
+.ocrlist .t{color:#007AFF}
+.ocrlist .m{color:#34A853}
+.ocrlist .s{color:#B0B3B8}
+</style>
+</head>
+<body>
+
+<h1>妙语 iOS · 直播模式效果图</h1>
+<div class="note">
+  对应实现：<code>MiaoyuLive</code> 广播扩展 + <code>LiveKit</code> 共享层 + 键盘 AI 面板直播区 + 主 App 直播页。<br>
+  一轮完整链路：<b>系统广播 → 每 2 秒本地 OCR → 按气泡判「我方/对方」→ 快照写 App Group → 键盘/主 App 出候选</b>。<br>
+  所有候选<b>只插入输入框</b>，发送永远由人按；OCR 全在本机，只有用户触发分析时对话文本才发往自配模型。
+</div>
+
+<div class="wall">
+
+  <!-- ============ 1. 聊天 + 键盘 AI 面板（直播监听中）============ -->
+  <div class="board">
+    <div class="tag">① 聊天 + 键盘 · 直播监听中（免复制）</div>
+    <div class="phone">
+      <div class="island"></div><div class="hb"></div>
+      <div class="sb"><span>20:31</span><span class="r">•••• 5G ▮</span></div>
+      <div class="scr">
+        <div class="chatnav"><span class="bk">‹</span><span class="nm">林小满</span><span class="dots">···</span></div>
+        <div class="chat">
+          <div class="time">20:24</div>
+          <div class="ba">在吗，周末那个方案你看了一眼没</div>
+          <div class="bu">看了看了，这两天有点忙</div>
+          <div class="bu">周五之前给你一版完整的，带预算表</div>
+          <div class="ba">行，记得把报价也放进去，老板要看价格</div>
+          <div class="bu">好嘞</div>
+          <div class="ba">对了上次说的那家餐厅，周末要不要去试试</div>
+          <div class="rd">对方正在输入…</div>
+        </div>
+        <div class="ibar">
+          <span class="ic">🎤</span>
+          <span class="f">妙语正在读屏…</span>
+          <span class="ic">😊</span><span class="ic">＋</span>
+        </div>
+        <div class="kb">
+          <div class="topbar">
+            <span class="logo">妙语</span>
+            <span class="tools"><span class="on">✨AI</span><span>短语</span><span>颜文字</span><span class="gl">🌐</span><span class="gl">⌄</span></span>
+          </div>
+          <div class="panelsep"></div>
+          <div class="panelhead"><span class="bk">‹ 键盘</span><span class="tt">AI 帮你说</span></div>
+          <div class="livecard">
+            <div class="hd"><span class="dot"></span><span>直播监听中 · 免复制</span><span class="r">App›我的›直播模式</span></div>
+            <div class="tgt primary"><span class="ic">📡</span><span class="tx">读屏幕分析：「对了上次说的那家餐厅，周末要不要去试试」</span></div>
+            <div class="tgt older"><span class="ic">🕘</span><span class="tx">回复更早：「行，记得把报价也放进去，老板要看价格」</span></div>
+            <div class="tgt older"><span class="ic">🕘</span><span class="tx">回复更早：「在吗，周末那个方案你看了一眼没」</span></div>
+          </div>
+          <div class="entrywrap">
+            <div class="entrycap">针对输入框里已打的那句话</div>
+            <div class="entryrow">
+              <div class="entry"><span class="i">🪄</span><span class="t">润色本条</span></div>
+              <div class="entry"><span class="i">💬</span><span class="t">沟通三策略</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="params">
+      <b>键盘高度 300pt</b>，面板区 270pt：直播卡片按内容自适应（1 主 + 最多 2 条更早），
+      下方保留输入框来源的两个入口。主目标取当前帧尾部的对方气泡，空帧时退回累积历史最近一条，<b>不会跳没</b>。
+    </div>
+  </div>
+
+  <!-- ============ 2. 键盘候选结果页 ============ -->
+  <div class="board">
+    <div class="tag">② 键盘候选结果（点一下上屏）</div>
+    <div class="phone">
+      <div class="island"></div><div class="hb"></div>
+      <div class="sb"><span>20:31</span><span class="r">•••• 5G ▮</span></div>
+      <div class="scr">
+        <div class="chatnav"><span class="bk">‹</span><span class="nm">林小满</span><span class="dots">···</span></div>
+        <div class="chat">
+          <div class="time">20:24</div>
+          <div class="ba">在吗，周末那个方案你看了一眼没</div>
+          <div class="bu">看了看了，这两天有点忙</div>
+          <div class="ba">行，记得把报价也放进去，老板要看价格</div>
+          <div class="ba">对了上次说的那家餐厅，周末要不要去试试</div>
+        </div>
+        <div class="ibar">
+          <span class="ic">🎤</span><span class="f">周六晚上怎么样，我订个靠窗的…</span>
+          <span class="ic">😊</span><span class="ic">＋</span>
+        </div>
+        <div class="kb">
+          <div class="topbar">
+            <span class="logo">妙语</span>
+            <span class="tools"><span class="on">✨AI</span><span>短语</span><span>颜文字</span><span class="gl">🌐</span><span class="gl">⌄</span></span>
+          </div>
+          <div class="panelsep"></div>
+          <div class="panelhead"><span class="bk">‹ 键盘</span><span class="tt">AI 帮你说</span></div>
+          <div class="sourcebar">针对：「对了上次说的那家餐厅，周末要不要去试试」</div>
+          <div class="cand">
+            <div class="ct">稳妥接住</div>
+            <div class="cc">想去啊，我一直惦记那家。周六还是周日？</div>
+          </div>
+          <div class="cand">
+            <div class="ct">幽默调侃</div>
+            <div class="cc">你都开口了，我哪敢说不去，订位交给我</div>
+          </div>
+          <div class="cand">
+            <div class="ct">推进话题</div>
+            <div class="cc">周六晚上怎么样，我提前订个靠窗的位置</div>
+          </div>
+          <div class="backbtn">返回</div>
+        </div>
+      </div>
+    </div>
+    <div class="params">
+      三条候选来自 <b>AI 帮你说</b>，风格互斥（稳 / 撩 / 推进）。点击只做 <code>insertText</code>，
+      不替换原文、不模拟回车——<b>发送仍由用户在宿主 App 里按</b>。
+    </div>
+  </div>
+
+  <!-- ============ 3. 主 App 直播模式页 ============ -->
+  <div class="board">
+    <div class="tag">③ 主 App「我的 → 直播模式」</div>
+    <div class="phone">
+      <div class="island"></div><div class="hb"></div>
+      <div class="sb"><span>20:31</span><span class="r">•••• 5G ▮</span></div>
+      <div class="scr">
+        <div class="nav"><span class="b">‹ 我的</span><span class="t">直播模式</span><span class="a"></span></div>
+        <div class="form">
+          <div class="sectcap" style="padding-top:2px">屏幕监听</div>
+          <div class="grp">
+            <div class="statusrow">
+              <span class="sicon">◉</span>
+              <div>
+                <div class="stt">监听中<span class="pill">LIVE</span></div>
+                <div class="ssub">画面变化 20:31:08 · 已识别 42 帧</div>
+              </div>
+            </div>
+            <div class="bcast">
+              <div class="btn">⏺</div>
+              <div class="cap">点按钮 → 选「妙语直播」→ 开始直播</div>
+            </div>
+            <div class="foot" style="padding-bottom:12px">
+              开始后切到任意聊天 App，这里会持续识别屏幕上的对话（每 2 秒一次，纯本地 OCR；
+              只有你触发分析时，识别出的对话文本才会发给你自己配的模型）。
+            </div>
+          </div>
+
+          <div class="sectcap">识别结果</div>
+          <div class="grp">
+            <div class="bubblerow"><div class="bb them">行，记得把报价也放进去，老板要看价格</div></div>
+            <div class="bubblerow me"><div class="bb">好嘞</div></div>
+            <div class="bubblerow"><div class="bb them">对了上次说的那家餐厅，周末要不要去试试</div></div>
+            <div class="toreply"><span class="ic">↩︎</span><span>待回：对了上次说的那家餐厅，周末要不要去试试</span></div>
+          </div>
+
+          <div class="sectcap">候选回复（点一下复制）</div>
+          <div class="grp">
+            <div class="row"><span class="tt">对方有新消息时自动分析</span><span class="switch"><i></i></span></div>
+            <div class="row"><span class="tt" style="color:var(--blue)">✨ 用当前识别结果生成候选</span></div>
+            <div class="row"><span class="tt" style="font-size:13.5px;line-height:1.45">想去啊，我一直惦记那家。周六还是周日？<br><span style="font-size:10.5px;color:var(--sub)">稳妥接住</span></span></div>
+            <div class="row"><span class="tt" style="font-size:13.5px;line-height:1.45">你都开口了，我哪敢说不去，订位交给我<br><span style="font-size:10.5px;color:var(--sub)">幽默调侃</span></span></div>
+          </div>
+          <div class="foot">自动分析默认关闭、且只在 App 前台运行；锁屏或切走后由键盘接管。</div>
+        </div>
+        <div class="tbar">
+          <div class="tb"><span class="i">🪄</span>改写</div>
+          <div class="tb"><span class="i">💬</span>短语</div>
+          <div class="tb"><span class="i">🕘</span>历史</div>
+          <div class="tb on"><span class="i">👤</span>我的</div>
+        </div>
+      </div>
+    </div>
+    <div class="params">
+      三态必须清楚：<b>监听中且有目标</b> / <b>只在监听还没读到消息</b> / <b>未开播</b>。
+      扩展在 <code>broadcastStarted</code> 就写心跳快照，所以开始广播后 1 秒内这里就显示「监听中」，不等首帧 OCR。
+    </div>
+  </div>
+
+  <!-- ============ 4. 未开播引导态 ============ -->
+  <div class="board">
+    <div class="tag">④ 未开播 · 键盘引导态</div>
+    <div class="phone">
+      <div class="island"></div><div class="hb"></div>
+      <div class="sb"><span>20:31</span><span class="r">•••• 5G ▮</span></div>
+      <div class="scr">
+        <div class="chatnav"><span class="bk">‹</span><span class="nm">林小满</span><span class="dots">···</span></div>
+        <div class="chat">
+          <div class="time">20:24</div>
+          <div class="ba">在吗，周末那个方案你看了一眼没</div>
+          <div class="bu">看了看了，这两天有点忙</div>
+          <div class="ba">对了上次说的那家餐厅，周末要不要去试试</div>
+        </div>
+        <div class="ibar">
+          <span class="ic">🎤</span><span class="f">在吗，周末那个…</span>
+          <span class="ic">😊</span><span class="ic">＋</span>
+        </div>
+        <div class="kb">
+          <div class="topbar">
+            <span class="logo">妙语</span>
+            <span class="tools"><span class="on">✨AI</span><span>短语</span><span>颜文字</span><span class="gl">🌐</span><span class="gl">⌄</span></span>
+          </div>
+          <div class="panelsep"></div>
+          <div class="panelhead"><span class="bk">‹ 键盘</span><span class="tt">AI 帮你说</span></div>
+          <div class="livecard">
+            <div class="hd"><span class="dot off"></span><span>未在直播监听</span><span class="r">App›我的›直播模式</span></div>
+            <div class="hint">去妙语 App「我的 → 直播模式」开启屏幕直播，就不用再长按复制</div>
+          </div>
+          <div class="entrywrap">
+            <div class="entrycap">针对输入框里已打的那句话</div>
+            <div class="entryrow">
+              <div class="entry"><span class="i">🪄</span><span class="t">润色本条</span></div>
+              <div class="entry"><span class="i">💬</span><span class="t">沟通三策略</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="params">
+      键盘扩展<b>拉不起宿主 App</b>（iOS 硬限制：扩展不能 openURL），所以右上角只给文字指路，
+      不做一个点不动的假按钮。无完全访问时整面板换成权限引导卡片。
+    </div>
+  </div>
+
+  <!-- ============ 5. 自检页 ============ -->
+  <div class="board">
+    <div class="tag">⑤ 开机自检（不开广播也能验 OCR）</div>
+    <div class="phone">
+      <div class="island"></div><div class="hb"></div>
+      <div class="sb"><span>20:31</span><span class="r">•••• 5G ▮</span></div>
+      <div class="scr">
+        <div class="nav"><span class="b">‹ 我的</span><span class="t">直播模式</span><span class="a"></span></div>
+        <div class="form">
+          <div class="sectcap" style="padding-top:2px">自检（不开广播也能验证 OCR）</div>
+          <div class="grp">
+            <div class="row"><span class="ic" style="background:#FF9F0A">🖼</span><span class="tt">合成示例截图自检</span></div>
+            <div class="row"><span class="ic" style="background:#34C759">📷</span><span class="tt">从相册选聊天截图识别</span></div>
+            <div class="selftest">
+              <div class="fakeimg">
+                <div class="fk-time">20:31</div>
+                <div class="fk them">在吗，周末的那个方案你看了一眼没</div>
+                <div class="fk me">看了看了，这两天有点忙</div>
+                <div class="fk me">周五之前给你一版完整的，带预算表</div>
+                <div class="fk them">行，记得把报价也放进去，老板要看价格</div>
+                <div class="fk me">好嘞</div>
+                <div class="fk them">对了上次说的那家餐厅，周末要不要去试试</div>
+              </div>
+              <div class="ocrlist">
+                <div><span class="s">[系统]</span> 20:31 <span style="color:#B0B3B8">（已清洗）</span></div>
+                <div><span class="t">[对方]</span> 在吗，周末的那个方案你看了一眼没</div>
+                <div><span class="m">[我]</span> 看了看了，这两天有点忙</div>
+                <div><span class="m">[我]</span> 周五之前给你一版完整的，带预算表</div>
+                <div><span class="t">[对方]</span> 行，记得把报价也放进去，老板要看价格</div>
+                <div><span class="m">[我]</span> 好嘞</div>
+                <div><span class="t">[对方]</span> 对了上次说的那家餐厅，周末要不要去试试</div>
+                <div><span class="s">[系统]</span> 发送 <span style="color:#B0B3B8">（已清洗）</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="tbar">
+          <div class="tb"><span class="i">🪄</span>改写</div>
+          <div class="tb"><span class="i">💬</span>短语</div>
+          <div class="tb"><span class="i">🕘</span>历史</div>
+          <div class="tb on"><span class="i">👤</span>我的</div>
+        </div>
+      </div>
+    </div>
+    <div class="params">
+      自检走的是<b>和广播扩展完全同一条代码路径</b>（<code>LiveOCREngine.recognize(cgImage:)</code> →
+      <code>LiveChatParser.parse</code>），所以在模拟器上、不开广播也能验证左右归属与时间戳/底部 UI 清洗。
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

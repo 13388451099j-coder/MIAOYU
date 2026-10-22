@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>妙语 iOS · UI 排版草稿 v1</title>
+<style>
+/* ============ 设计 Token（与 SwiftUI 落地参数一一对应） ============
+   间距系统 4/8/12/16/20/24；圆角 10/12/16/22；
+   字阶：大标题 28·700 / 标题 20·600 / 正文 17·400 / 说明 13·400 / 微 11
+   主色 #007AFF(亮) #0A84FF(暗)；键盘键高 42·间距 6·圆角 12 */
+:root{
+  --blue:#007AFF; --blue2:#0A84FF;
+  --bg:#F2F2F7; --card:#FFFFFF; --text:#1C1C1E; --sub:#8E8E93;
+  --sep:#E5E5EA; --green:#34C759; --red:#FF3B30; --orange:#FF9500;
+  --kb-bg:#D1D4DA; --kb-key:#FFFFFF; --kb-special:#ABB0BC; --kb-text:#1C1C1E;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-font-smoothing:antialiased}
+body{background:#23252B;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;color:#E8E8ED;padding:28px}
+h1{font-size:22px;font-weight:700;margin-bottom:6px}
+.subnote{font-size:13px;color:#9A9DA6;margin-bottom:22px;line-height:1.7}
+.legend{display:flex;gap:14px;font-size:12px;color:#9A9DA6;margin-bottom:26px}
+.legend b{color:#E8E8ED;font-weight:600}
+.board-wall{display:flex;flex-wrap:wrap;gap:34px;align-items:flex-start}
+.board{display:flex;flex-direction:column;gap:9px}
+.board .tag{font-size:13px;font-weight:600;color:#E8E8ED}
+.board .params{font-size:11px;color:#8A8D96;line-height:1.55;max-width:320px}
+.phone{width:322px;height:672px;background:var(--bg);border:9px solid #0B0B0F;border-radius:44px;
+  overflow:hidden;position:relative;box-shadow:0 18px 44px rgba(0,0,0,.5)}
+.phone.dark{background:#000}
+.notch{position:absolute;top:9px;left:50%;transform:translateX(-50%);width:104px;height:26px;background:#0B0B0F;border-radius:16px;z-index:9}
+.homebar{position:absolute;bottom:7px;left:50%;transform:translateX(-50%);width:120px;height:5px;border-radius:3px;background:rgba(60,60,67,.4);z-index:9}
+.statusbar{height:42px;display:flex;justify-content:space-between;align-items:flex-end;padding:0 26px 4px;font-size:12.5px;font-weight:600;color:var(--text)}
+.screen{height:calc(100% - 42px);overflow:hidden;display:flex;flex-direction:column;color:var(--text)}
+/* ---- 通用组件 ---- */
+.navbar{height:48px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;background:transparent}
+.navbar .title{font-size:17px;font-weight:600}
+.navbar .back{color:var(--blue);font-size:16px}
+.navbar .act{color:var(--blue);font-size:15px}
+.bigtitle{font-size:28px;font-weight:700;padding:2px 16px 10px}
+.pillrow{display:flex;gap:8px;overflow:hidden;padding:2px 16px 10px}
+.pill{padding:7px 14px;border-radius:18px;font-size:14px;background:var(--card);color:var(--text);border:1px solid var(--sep);white-space:nowrap}
+.pill.on{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:600}
+.card{background:var(--card);border-radius:14px;margin:0 16px 12px;padding:14px}
+.list{background:var(--card);border-radius:14px;margin:0 16px 12px;overflow:hidden}
+.row{display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:.5px solid var(--sep)}
+.row:last-child{border-bottom:none}
+.row .ic{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;color:#fff;flex:none}
+.row .tt{font-size:16px;flex:1}
+.row .dd{font-size:13px;color:var(--sub)}
+.row .chev{color:#C7C7CC;font-size:15px}
+.btn-blue{background:var(--blue);color:#fff;border:none;border-radius:12px;padding:13px 0;width:100%;font-size:16px;font-weight:600;text-align:center}
+.btn-ghost{background:transparent;color:var(--blue);border:1px solid var(--blue);border-radius:12px;padding:12px 0;width:100%;font-size:15px;font-weight:600;text-align:center}
+.tabbar{margin-top:auto;background:rgba(249,249,249,.94);border-top:.5px solid var(--sep);display:flex;padding:7px 0 20px}
+.phone.dark .tabbar{background:rgba(29,29,31,.94);border-top-color:#38383A}
+.tab{flex:1;text-align:center;font-size:10.5px;color:var(--sub)}
+.tab.on{color:var(--blue)}
+.tab .ti{font-size:21px;display:block;margin-bottom:2px}
+/* 气泡 */
+.bubble-u,.bubble-a{max-width:78%;padding:10px 13px;border-radius:18px;font-size:15.5px;line-height:1.5;position:relative}
+.bubble-u{background:var(--blue);color:#fff;margin-left:auto;border-bottom-right-radius:6px}
+.bubble-a{background:#E9E9EB;color:var(--text);border-bottom-left-radius:6px}
+.phone.dark .bubble-a{background:#2C2C2E;color:#E8E8ED}
+.bmeta{font-size:11px;color:var(--sub);margin-top:5px;display:flex;gap:12px}
+/* 输入条 */
+.inputbar{display:flex;gap:9px;padding:10px 14px 14px;background:rgba(249,249,249,.96);border-top:.5px solid var(--sep)}
+.phone.dark .inputbar{background:rgba(29,29,31,.96);border-top-color:#38383A}
+.inputbar .field{flex:1;background:var(--card);border:1px solid var(--sep);border-radius:18px;padding:9px 14px;font-size:14.5px;color:var(--sub)}
+.phone.dark .inputbar .field{background:#1C1C1E;border-color:#38383A}
+.inputbar .send{width:38px;height:38px;border-radius:19px;background:var(--blue);color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;flex:none}
+/* ---- 键盘 ---- */
+.kbwrap{margin-top:auto}
+.candbar{height:46px;background:var(--kb-bg);display:flex;align-items:center;padding:0 8px;gap:6px;border-bottom:1px solid #B9BDC5}
+.cand{padding:6px 12px;border-radius:8px;font-size:16px;color:var(--kb-text);white-space:nowrap}
+.cand.first{background:#0A84FF;color:#fff;font-weight:600;font-size:18px}
+.cand.pinyin{color:#6B6F78;font-size:14px}
+.kbarea{background:var(--kb-bg);padding:7px 4px 26px}
+.kbrow{display:flex;gap:6px;margin-bottom:6px;justify-content:center}
+.key{flex:1;max-width:34px;height:42px;background:var(--kb-key);border-radius:12px;display:flex;align-items:center;justify-content:center;
+  font-size:17px;color:var(--kb-text);box-shadow:0 1px 0 rgba(0,0,0,.28)}
+.key.sp{max-width:46px;background:var(--kb-special);font-size:13px}
+.key.space{max-width:150px}
+.key.rt{max-width:46px;background:var(--kb-special);font-size:12px}
+.kb-topbar{display:flex;align-items:center;justify-content:space-between;background:#ECEDEF;padding:6px 12px;border-bottom:1px solid #CDD0D6}
+.kb-logo{font-size:13px;font-weight:700;color:#0A84FF}
+.kb-tb{display:flex;gap:16px;font-size:12px;color:#6B6F78}
+.kb-tb .on{color:#0A84FF;font-weight:600}
+.phone.dark .kb-bg2, .dark .kbarea{background:#1D1D1F}
+.dark .key{background:#6E6E73;color:#fff;box-shadow:0 1px 0 rgba(0,0,0,.55)}
+.dark .key.sp,.dark .key.rt{background:#48484C}
+.dark .candbar{background:#1D1D1F;border-bottom-color:#333}
+.dark .cand{color:#E8E8ED}
+.dark .kb-topbar{background:#2C2C2E;border-bottom-color:#3A3A3C}
+.dark .kb-logo{color:#0A84FF}
+.dark .kb-tb{color:#98989E}
+.ai-card{background:#FFF;border-radius:12px;padding:11px 12px;box-shadow:0 1px 4px rgba(0,0,0,.12);font-size:14px;line-height:1.5;color:var(--text)}
+.badge{display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600}
+.badge.g{background:#E8F8EE;color:#248A3D}.badge.r{background:#FFE9E7;color:#D70015}.badge.o{background:#FFF3E0;color:#C93400}
+.ggrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:0 16px}
+.gcell{background:var(--card);border-radius:12px;padding:12px 8px;text-align:center;font-size:13px}
+.gcell .ge{font-size:22px;display:block;margin-bottom:4px}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:var(--bg);border-radius:16px 16px 0 0;padding:14px 16px 26px;box-shadow:0 -8px 30px rgba(0,0,0,.25)}
+.grabber{width:36px;height:5px;border-radius:3px;background:#C7C7CC;margin:0 auto 12px}
+.progress{height:4px;border-radius:2px;background:var(--sep);overflow:hidden}
+.progress i{display:block;height:100%;width:62%;background:var(--blue);border-radius:2px}
+.keyhint{position:absolute;right:10px;bottom:34px;background:rgba(28,28,30,.82);color:#fff;font-size:10.5px;padding:5px 9px;border-radius:8px;line-height:1.5}
+</style>
+</head>
+<body>
+<h1>妙语 iOS · UI 排版草稿 v1（共 16 板）</h1>
+<div class="subnote">母仓库同款 HTML 草稿流程：确认排版后按图上标注参数落到 SwiftUI。设计基线：iOS 16 原生控件风 · 8pt 网格 · 系统蓝主色 · 全局暗色适配。<br>
+标注格式：<b>字号/字重 · 颜色 · 圆角 · 间距</b>，全部参数写进每块板下方的 params。</div>
+<div class="legend"><span><b>■</b> 蓝主色 #007AFF</span><span><b>●</b> 用户气泡</span><span><b>●</b> AI 气泡</span><span><b>□</b> 卡片 #FFF · 圆角 14</span></div>
+
+<div class="board-wall">
+
+<!-- ═══════════ 01 改写页 · 空态 ═══════════ -->
+<div class="board"><div class="tag">01 · 改写页（空态）— Tab 1</div>
+<div class="phone"><div class="notch"></div><div class="statusbar"><span>9:41</span><span>􀛨 􀙇</span></div>
+<div class="screen">
+  <div class="bigtitle">改写</div>
+  <div class="pillrow">
+    <span class="pill on">高情商妙语</span><span class="pill">聊天鬼才</span><span class="pill">毒舌损友</span><span class="pill">温柔知心</span><span class="pill">我的风格 ›</span>
+  </div>
+  <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:0 40px;text-align:center">
+    <div style="font-size:44px">💬</div>
+    <div style="font-size:17px;font-weight:600">把话丢进来，我帮你换个说法</div>
+    <div style="font-size:13px;color:var(--sub);line-height:1.7">粘贴别人的消息 → 选人设 → 生成得体的回复<br>也可从「我的」进入截图识别</div>
+    <div style="display:flex;gap:8px;margin-top:6px">
+      <span class="pill">试试：怎么婉拒聚餐</span>
+    </div>
+  </div>
+  <div style="display:flex;justify-content:space-between;padding:0 16px 10px;font-size:12px;color:var(--sub)">
+    <span>🪄 沟通三策略</span><span>📜 从短语选</span>
+  </div>
+  <div class="inputbar"><div class="field">输入要改写的话…</div><div class="send">↑</div></div>
+</div><div class="homebar"></div></div>
+<div class="params">空态插画 44px · 引导句 17/600 · 输入条固定底部（安全区 14）· 人设胶囊高 34 圆角 18 横滑 · 左下快捷入口 12px #8E8E93</div>
+</div>
+
+<!-- ═══════════ 02 改写页 · 对话态 ═══════════ -->
+<div class="board"><div class="tag">02 · 改写页（对话态）— 核心界面</div>
+<div class="phone"><div class="notch"></div><div class="statusbar"><span>9:41</span><span>􀛨 􀙇</span></div>
+<div class="screen">
+  <div class="bigtitle">改写</div>
+  <div class="pillrow"><span class="pill on">高情商妙语</span><span class="pill">聊天鬼才</span><span class="pill">＋</span></div>
+  <div style="flex:1;overflow:hidden;display:flex;flex-direction:column;gap:12px;padding:4px 16px">
+    <div><div class="bubble-u">她说周末想一个人静静，我要不要问问怎么了</div></div>
+    <div>
+      <div class="bubble-a">她想独处的话，可以先不追问。回一句让她安心的话，把空间留给她：<br>「好呀，你好好休息，想聊天随时找我」</div>
+      <div class="bmeta"><span>⧉ 复制</span><span>☆ 收藏</span><span>↻ 再来一版</span><span>21:04</span></div>
+    </div>
+    <div><div class="bubble-u">她回复说谢谢我理解她</div></div>
+    <div>
+      <div class="bubble-a" style="opacity:.75">（AI 正在生成…）</div>
+    </div>
+  </div>
+  <div class="inputbar"><div class="field" style="color:var(--text)">她回复说谢谢我理解她</div><div class="send">↑</div></div>
+</div><div class="homebar"></div></div>
+<div class="params">气泡 max-width 78% · 圆角 18（贴边角 6）· 用户蓝底白字 / AI #E9E9EB · 操作行 11px #8E8E93 间距 12 · 生成中气泡透明度 .75 · 气泡间距 12 · 行高 1.5</div>
+</div>
+
+<!-- ═══════════ 03 沟通三策略 Sheet ═══════════ -->
+<div class="board"><div class="tag">03 · 沟通三策略（Sheet 弹层）</div>
+<div class="phone" style="background:linear-gradient(#F2F2F7 42%, #D9DBE0 42%)"><div class="notch"></div><div class="statusbar"><span>9:41</span><span>􀛨 􀙇</span></div>
+<div class="screen">
+  <div class="bigtitle">改写</div>
+  <div style="height:300px"></div>
+  <div class="sheet">
+    <div class="grabber"></div>
+    <div style="font-size:17px;font-weight:600;margin-bottom:3px">沟通三策略</div>
+    <div style="font-size:12.5px;color:var(--sub);margin-bottom:12px">针对：「周末想一个人静静」· 人设：高情商妙语</div>
+    <div class="card" style="margin:0 0 9px;border-left:3px solid #34C759">
+      <div style="font-size:13px;font-weight:600;color:#248A3D;margin-bottom:4px">① 给空间 · 稳妥</div>
+      <div style="font-size:14.5px;line-height:1.5">好呀，你好好休息，想聊天随时找我～</div>
+    </div>
+    <div class="card" style="margin:0 0 9px;border-left:3px solid #007AFF">
+      <div style="font-size:13px;font-weight:600;color:#007AFF;margin-bottom:4px">② 轻关心 · 拉近</div>
+      <div style="font-size:14.5px;line-height:1.5">收到～是最近太累了吗？需要我带杯奶茶放你门口吗（不敲门）</div>
+    </div>
+    <div class="card" style="margin:0 0 12px;border-left:3px solid #FF9500">
+      <div style="font-size:13px;font-weight:600;color:#C93400;margin-bottom:4px">③ 幽默化解 · 冒险</div>
+      <div style="font-size:14.5px;line-height:1.5">行，那我把想念调成静音模式，周一再响 🔇</div>
+    </div>
+    <button class="btn-ghost">关闭</button>
+  </div>
+</div><div class="homebar"></div></div>
+<div class="params">Sheet 圆角 16 顶部 · 抓手条 36×5 · 策略卡左边框 3px 风格色（绿稳/蓝近/橙险）· 标签 13/600 · 正文 14.5/1.5 · 卡间距 9</div>
+</div>
+
+<!-- ═══════════ 04 人设管理 ═══════════ -->
+<div class="board"><div class="tag">04 · 人设列表 + 编辑</div>
+<div class="phone"><div class="notch"></div><div class="statusbar"><span>9:41</span><span>􀛨 􀙇</span></div>
+<div class="screen">
+  <div class="navbar"><span class="back">‹ 我的</span><span class="title">人设</span><span class="act">＋ 新建</span></div>
+  <div class="list" style="margin-top:4px">
+    <div class="row"><div class="ic" style="background:#007AFF">😄</div><div style="flex:1"><div class="tt">高情商妙语</div><div class="dd">内置 · 当前使用</div></div><span class="badge g">使用中</span></div>
+    <div class="row"><div class="ic" style="background:#FF9500">😎</div><div style="flex:1"><div class="tt">聊天鬼才</div><div class="dd">内置</div></div><span class="chev">›</span></div>
+    <div class="row"><div class="ic" style="background:#FF3B30">😈</div><div style="flex:1"><div class="tt">毒舌损友</div><div class="dd">内置</div></div><span class="chev">›</span></div>
+    <div class="row"><div class="ic" style="background:#5856D6">🌸</div><div style="flex:1"><div class="tt">温柔知心</div><div class="dd">内置</div></div><span class="chev">›</span></div>
+    <div class="row"><div class="ic" style="background:#34C759">✏️</div><div style="flex:1"><div class="tt">我的风格</div><div class="dd">个人模板 · 可编辑</div></div><span class="chev">›</span></div>
+  </div>
+  <div style="flex:1"></div>
+  <div style="font-size:12px;color:var(--sub);padding:0 20px 8px;line-height:1.6">内置人设只读；个人模板与自建人设可编辑，键盘 AI 卡片与改写页共用此激活人设。</div>
+  <div class="tabbar"><span class="tab"><span class="ti">💬</span>改写</span><span class="tab"><span class="ti">📜</span>短语</span><span class="tab"><span class="ti">🕘</span>历史</span><span class="tab on"><span class="ti">👤</span>我的</span></span></div>
+</div><div class="homebar"></div></div>
+<div class="params">行高 54 · 图标块 30 圆角 8 · 主文 16/说明 13 #8E8E93 · 「使用中」徽章 #E8F8EE/#248A3D · 列表卡片圆角 14 外边距 16</div>
+</div>
+
+<!-- ═══════════ 05 人设编辑 ═══════════ -->
+<div class="board"><div class="tag">05 · 人设编辑</div>
+<div class="phone"><div class="notch"></div><div class="statusbar"><span>9:41</span><span>􀛨 􀙇</span></div>
+<div class="screen">
+  <div class="navbar"><span class="back">‹ 人设</span><span class="title">编辑人设</span><span class="act">存储</span></div>
+  <div class="card" style="margin-top:4px">
+    <div style="font-size:13px;color:var(--sub);margin-bottom:6px">名称</div>
+    <div style="font-size:16px;padding:10px 12px;background:var(--bg);border-radius:10px">我的风格</div>
+  </div>
+  <div class="card">
+    <div style="font-size:13px;color:var(--sub);margin-bottom:6px">System Prompt（人设正文）</div>
+    <div style="font-size:14px;line-height:1.6;padding:10px 12px;background:var(--bg);border-radius:10px;min-height:170px">你是用户的聊天嘴替。用户给你一段话，你按「温柔但直接」的风格改写……<br><br><span style="color:var(--sub)">要求：只输出改写后的文本；不编造事实；长度贴上下文…</span></div>
+    <div style="font-size:11.5px;color:var(--sub);margin-top:7px;display:flex;justify-content:space-between"><span>写清：语气 · 底线 · 输出格式</span><span>312 字</span></div>
+  </div>
+  <div class="card" style="display:flex;gap:8px;flex-direction:column">
+    <button class="btn-ghost">恢复默认模板</button>
+    <button class="btn-ghost" style="color:var(--red);border-color:var(--red)">删除此人设</button>
+  </div>
+</div><div class="homebar"></div></div>
+<div class="params">编辑区背景 #F2F2F7 圆角 10 内边距 12 · 字数统计 11.5px 右对齐 · 危险操作红 #FF3B30 与主按钮拉开 8 · 导航右侧「存储」蓝字 15</div>
+</div>
+
+<!-- ═══════════ 06 模型设置 ═══════════ -->
+<div class="board"><div class="tag">06 · 模型设置（列表 + 详情）</div>
+<div class="phone"><div class="notch"></div><div class="statusbar"><span>9:41</span><span>􀛨 􀙇</span></div>
+<div class="screen">
+  <div class="navbar"><span class="back">‹ 我的</span><span class="title">模型设置</span><span></span></div>
+  <div style="display:flex;gap:10px">
+    <div style="flex:1">
+      <div class="list" style="margin:4px 0 0 16px">
+        <div class="row"><div class="ic" style="background:#4D6BFE">D</div><div style="flex:1"><div class="tt" style="font-size:14.5px">DeepSeek</div></div><span class="badge g">✓</span></div>
+        <div class="row"><div class="ic" style="background:#3859FF">智</div><div style="flex:1"><div class="tt" style="font-size:14.5px">智谱 GLM</div></div><span class="chev">›</span></div>
+        <div class="row"><div class="ic" style="background:#615CED">通</div><div style="flex:1"><div class="tt" style="font-size:14.5px">通义千问</div></div><span class="chev">›</span></div>
+        <div class="row"><div class="ic" style="background:#0B0B0F">月</div><div style="flex:1"><div class="tt" style="font-size:14.5px">Kimi</div></div><span class="chev">›</span></div>
+        <div class="row"><div class="ic" style="background:#00B96B">零</div><div style="flex:1"><div class="tt" style="font-size:14.5px">零一万物</div></div><span class="chev">›</span></div>
+        <div class="row"><div class="ic" style="background:#FF6900">米</div><div style="flex:1"><div class="tt" style="font-size:14.5px">小米 MiMo</div></div><span class="chev">›</span></div>
+      </div>
+      <div style="font-size:11.5px;color:var(--sub);padding:2px 0 0 20px;line-height:1.6">Key 存 Keychain；<br>配置经 App Group 与键盘共享</div>
+    </div>
+    <div style="flex:1.15;padding:4px 16px 0 0">
+      <div style="font-size:15px;font-weight:600;margin:8px 0 8px">DeepSeek · 详情</div>
+      <div class="card" style="margin:0 0 9px">
+        <div style="font-size:12.5px;color:var(--sub);margin-bottom:5px">API Key</div>
+        <div style="font-size:13.5px;padding:9px 10px;background:var(--bg);border-radius:9px">sk-9e96••••••••2d2</div>
+        <div style="font-size:11px;color:var(--green);margin-top:5px">✓ 已配置</div>
+      </div>
+      <div class="card" style="margin:0 0 9px">
+        <div style="font-size:12.5px;color:var(--sub);margin-bottom:6px">模型</div>
+        <div style="display:flex;flex-direction:column;gap:6px;font-size:13.5px">
+          <span style="background:var(--blue);color:#fff;border-radius:8px;padding:7px 10px">deepseek-chat ✓</span>
+          <span style="border:1px solid var(--sep);border-radius:8px;padding:7px 10px">deepseek-reasoner</span>
+        </div>
+      </div>
+      <div class="card" style="margin:0 0 9px">
+        <div style="font-size:12.5px;color:var(--sub);margin-bottom:5px">自定义 URL（可选）</div>
+        <div style="font-size:12px;color:var(--sub);padding:8px 10px;background:var(--bg);border-radius:9px">api.deepseek.com/v1</div>
+      </div>
+      <button class="btn-blue" style="padding:11px 0;font-size:14.5px">测试连接</button>
+      <div style="font-size:11.5px;color:var(--green);margin-top:6px">✓ 连接成功 · deepseek-chat · 0.8s</div>
+    </div>
+  </div>
+</div><div class="homebar"></div></div>
+<div class="params">双栏并列展示（实机为 列表→push 详情）· Key 打码 sk-•••· 状态绿 11px · 模型选中蓝底白字圆角 8 · 测试结果 11.5 绿</div>
+</div>
+
+<!-- ═══════════ 07 快捷短语 ═══════════ -->
+<div class="board"><div class="tag">07 · 快捷短语（Tab 2）</div>
+<div class="phone"><div class="notch"></div><div class="statusbar"><span>9:41</span><span>􀛨 􀙇</span></div>
+<div class="screen">
+  <div style="display:flex;justify-content:space-between;align-items:flex-end;padding:2px 16px 10px">
+    <div class="bigtitle" style="padding:0">短语</div><span style="color:var(--blue);font-size:15px">＋ 添加</span>
+  </div>
+  <div class="list">
+    <div class="row"><div style="flex:1"><div class="tt">哈哈好的</div><div class="dd">常用 · 键盘可用</div></div><span style="color:#C7C7CC;font-size:13px">↑ ↓</span><span class="chev">✎</span></div>
+    <div class="row"><div style="flex:1"><div class="tt">在忙，稍后回你</div><div class="dd">常用 · 键盘可用</div></div><span style="color:#C7C7CC;font-size:13px">↑ ↓</span><span class="chev">✎</span></div>
+    <div class="row"><div style="flex:1"><div class="tt">可以呀 / 没问题</div><div class="dd">常用</div></div><span style="color:#C7C7CC;font-size:13px">↑ ↓</span><span class="chev">✎</span></div>
+    <div class="row"><div style="flex:1"><div class="tt">辛苦了，多谢！</div><div class="dd">职场</div></div><span style="color:#C7C7CC;font-size:13px">↑ ↓</span><span class="chev">✎</span></div>
+    <div class="row"><div style="flex:1"><div class="tt">晚安，好梦 🌙</div><div class="dd">日常</div></div><span style="color:#C7C7CC;font-size:13px">↑ ↓</span><span class="chev">✎</span></div>
+  </div>
+  <div style="flex:1"></div>
+  <div style="font-size:12px;color:var(--sub);padding:0 20px 8px;line-height:1.6">上移/下移即调整键盘面板顺序；这里的短语在键盘「短语」面板网格一键上屏。</div>
+  <div class="tabbar"><span class="tab"><span class="ti">💬</span>改写</span><span class="tab on"><span class="ti">📜</span>短语</span><span class="tab"><span class="ti">🕘</span>历史</span><span class="tab"><span class="ti">👤</span>我的</span></span></div>
+</div><div class="homebar"></div></div>
+<div class="params">标题 28/700 与「＋添加」同行右对齐 · 行内排序控件 13px 灰 · 底部说明 12/1.6 #8E8E93</div>
+</div>
+
+<!-- ═══════════ 08 历史 ═══════════ -->
+<div class="board"><div class="tag">08 · 历史（Tab 3）</div>
+<div class="phone"><div class="notch"></div><div class="statusbar"><span>9:41</span><span>􀛨 􀙇</span></div>
+<div class="screen">
+  <div style="display:flex;justify-content:space-between;align-items:flex-end;padding:2px 16px 10px">
+    <div class="bigtitle" style="padding:0">历史</div><span style="color:var(--red);font-size:13px">清空</span>
+  </div>
+  <div class="list">
+    <div class="row"><div style="flex:1"><div class="tt">周末独处怎么回</div><div class="dd">她想一个人静静… · 高情商妙语</div></div><span class="dd" style="text-align:right">昨天<br>21:04</span></div>
+    <div class="row"><div style="flex:1"><div class="tt">婉拒同事凑份子</div><div class="dd">观点：拒绝但不伤和气 · 毒舌损友</div></div><span class="dd" style="text-align:right">昨天<br>18:22</span></div>
+    <div class="row"><div style="flex:1"><div class="tt">道歉信润色</div><div class="dd">给客户延迟交付道歉 · 温柔知心</div></div><span class="dd" style="text-align:right">10-17<br>14:03</span></div>
+    <div class="row"><div style="flex:1"><div class="tt">加班回复老板</div><div class="dd">高情商妙语</div></div><span class="dd" style="text-align:right">10-16<br>09:41</span></div>
+  </div>
+  <div style="flex:1"></div>
+  <div class="tabbar"><span class="tab"><span class="ti">💬</span>改写</span><span class="tab"><span class="ti">📜</span>短语</span><span class="tab on"><span class="ti">🕘</span>历史</span><span class="tab"><span class="ti">👤</span>我的</span></span></div>
+</div><div class="homebar"></div></div>
+<div class="params">会话标题 16 · 预览一行截断 13 #8E8E93 · 右侧时间两行 12 · 「清空」红 13 带确认弹窗 · 左滑显示删除（未画出）</div>
+</div>
+
+<!-- ═══════════ 09 我的 ═══════════ -->
+<div class="board"><div class="tag">09 · 我的（Tab 4）</div>
+<div class="phone"><div class="notch"></div><div class="statusbar"><span>9:41</span><span>􀛨 􀙇</span></div>
+<div class="screen">
+  <div class="bigtitle">我的</div>
+  <div class="card" style="display:flex;align-items:center;gap:12px">
+    <div style="font-size:30px">⌨️</div>
+    <div style="flex:1">
+      <div style="font-size:15.5px;font-weight:600">妙语键盘</div>
+      <div style="font-size:12.5px;color:var(--sub);margin-top:2px">完全访问：<span style="color:#248A3D;font-weight:600">已开启</span> · AI 联网可用</div>
+    </div>
+    <span class="chev">›</span>
+  </div>
+  <div class="list">
+    <div class="row"><div class="ic" style="background:#007AFF">💬</div><div class="tt">人设管理</div><span class="dd">4 内置＋1 自定义</span><span class="chev">›</span></div>
+    <div class="row"><div class="ic" style="background:#5856D6">🤖</div><div class="tt">模型设置</div><span class="dd">DeepSeek</span><span class="chev">›</span></div>
+    <div class="row"><div class="ic" style="background:#34C759">🖼️</div><div class="tt">截图识别改写</div><span class="chev">›</span></div>
+  </div>
+  <div class="list">
+    <div class="row"><div class="ic" style="background:#8E8E93">📖</div><div class="tt">键盘安装引导</div><span class="chev">›</span></div>
+    <div class="row"><div class="ic" style="background:#8E8E93">🔒</div><div class="tt">隐私说明</div><span class="dd">本地存储</span><span class="chev">›</span></div>
+  </div>
+  <div style="flex:1"></div>
+  <div style="text-align:center;font-size:11.5px;color:var(--sub);padding-bottom:8px">妙语 iOS 1.0 · 数据仅存本机 · AI 请求直达服务商</div>
+  <div class="tabbar"><span class="tab"><span class="ti">💬</span>改写</span><span class="tab"><span class="ti">📜</span>短语</span><span class="tab"><span class="ti">🕘</span>历史</span><span class="tab on"><span class="ti">👤</span>我的</span></span></div>
+</div><div class="homebar"></div></div>
+<div class="params">键盘状态卡置顶（核心引导位）· 分组间 12 · 版本页脚 11.5 居中 · 图标块延续 30×30 彩底体系</div>
+</div>
+
+<!-- ═══════════ 10 键盘引导 ═══════════ -->
+<div class="board"><div class="tag">10 · 键盘安装引导</div>
+<div class="phone"><div class="notch"></div><div class="statusbar"><span>9:41</span><span>􀛨 􀙇</span></div>
+<div class="screen">
+  <div class="navbar"><span class="back">‹ 我的</span><span class="title">启用妙语键盘</span><span></span></div>
+  <div style="display:flex;flex-direction:column;gap:10px;padding:4px 16px">
+    <div class="card" style="display:flex;gap:11px">
+      <div style="width:26px;height:26px;border-radius:13px;background:var(--blue);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex:none">1</div>
+      <div><div style="font-size:14.5px;font-weight:600">添加键盘</div><div style="font-size:12.5px;color:var(--sub);line-height:1.6;margin-top:2px">设置 → 通用 → 键盘 → 键盘 → 添加新键盘 → 选「妙语键盘」</div></div>
+    </div>
+    <div class="card" style="display:flex;gap:11px">
+      <div style="width:26px;height:26px;border-radius:13px;background:var(--blue);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex:none">2</div>
+      <div><div style="font-size:14.5px;font-weight:600">允许完全访问</div><div style="font-size:12.5px;color:var(--sub);line-height:1.6;margin-top:2px">点开妙语键盘 → 打开「允许完全访问」。AI 联网、读剪贴板需要它。</div></div>
+    </div>
+    <div class="card" style="display:flex;gap:11px">
+      <div style="width:26px;height:26px;border-radius:13px;background:var(--sep);color:var(--sub);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex:none">3</div>
+      <div style="opacity:.6"><div style="font-size:14.5px;font-weight:600">在聊天里切到妙语</div><div style="font-size:12.5px;color:var(--sub);line-height:1.6;margin-top:2px">键盘左下 🌐 切换；拼音/T9/AI 卡片/短语面板就绪。</div></div>
+    </div>
+    <div class="card" style="background:#E8F8EE;display:flex;align-items:center;gap:8px">
+      <span style="font-size:16px">✅</span><span style="font-size:13.5px;color:#248A3D;font-weight:600">当前状态：键盘已添加，完全访问已开启</span>
+    </div>
+  </div>
+</div><div class="homebar"></div></div>
+<div class="params">步骤圆 26px 数字 · 完成项绿底卡 #E8F8EE · 未达步骤灰化 opacity .6 · 步骤卡间距 10</div>
+</div>
+
+<!-- ═══════════ 11 截图 OCR ═══════════ -->
+<div class="board"><div class="tag">11 · 截图识别改写</div>
+<div class="phone"><div class="notch"></div><div class="statusbar"><span>9:41</span><span>􀛨 􀙇</span></div>
+<div class="screen">
+  <div class="navbar"><span class="back">‹ 我的</span><span class="title">截图识别</span><span></span></div>
+  <div class="card" style="height:200px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;border:1.5px dashed #C7C7CC;background:transparent">
+    <div style="font-size:34px">🖼️</div>
+    <div style="font-size:14px;color:var(--sub)">从相册选聊天截图</div>
+    <button class="btn-blue" style="width:150px;padding:9px 0;font-size:13.5px">选择照片</button>
+  </div>
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+      <span style="font-size:13px;color:var(--sub)">识别结果（可编辑）</span><span class="badge o">Vision OCR</span>
+    </div>
+    <div style="font-size:14px;line-height:1.6;min-height:74px;padding:9px 11px;background:var(--bg);border-radius:9px">她说周末想一个人静静，让我别找她。可是我们上周还好好的，我不知道该怎么办了</div>
+  </div>
+  <button class="btn-blue" style="margin:0 16px">送去 AI 改写 →</button>
+  <div style="font-size:11.5px;color:var(--sub);padding:8px 20px;line-height:1.6">iOS 无法自动截屏（系统限制）；在聊天 App 截图后到这里选图即可。识别只在本机完成。</div>
+</div><div class="homebar"></div></div>
+<div class="params">空选区虚线框 1.5 dashed · OCR 徽章橙 · 识别文本可编辑区 #F2F2F7 圆角 9 · 底部限制说明 11.5 灰</div>
+</div>
+
+<!-- ═══════════ 12 键盘 · 拼音（亮）═══════════ -->
+<div class="board"><div class="tag">12 · 键盘 · 拼音 26 键 + 候选（亮）</div>
+<div class="phone" style="background:linear-gradient(#F7F8FA 46%, var(--kb-bg) 46%)"><div class="notch"></div><div class="statusbar"><span>9:41</span><span>􀛨 􀙇</span></div>
+<div class="screen" style="justify-content:flex-end">
+  <div style="text-align:center;color:#B9BDC5;font-size:13px;padding-bottom:14px">（宿主 App 聊天界面）</div>
+  <div class="kbwrap">
+    <div class="kb-topbar"><span class="kb-logo">妙语</span><span class="kb-tb"><span class="on">✨AI</span><span>📜短语</span><span>😊表情</span></span><span style="font-size:13px;color:#6B6F78">⌄</span></div>
+    <div class="candbar">
+      <span class="cand first">你好</span><span class="cand">拟好</span><span class="cand">泥嚎</span><span class="cand">腻号</span><span class="cand pinyin">ni hao</span>
+    </div>
+    <div class="kbarea">
+      <div class="kbrow"><span class="key">q</span><span class="key">w</span><span class="key">e</span><span class="key">r</span><span class="key">t</span><span class="key">y</span><span class="key">u</span><span class="key">i</span><span class="key">o</span><span class="key">p</span></div>
+      <div class="kbrow" style="padding:0 16px"><span class="key">a</span><span class="key">s</span><span class="key">d</span><span class="key">f</span><span class="key">g</span><span class="key">h</span><span class="key">j</span><span class="key">k</span><span class="key">l</span></div>
+      <div class="kbrow"><span class="key sp">⇧</span><span class="key">z</span><span class="key">x</span><span class="key">c</span><span class="key">v</span><span class="key">b</span><span class="key">n</span><span class="key">m</span><span class="key sp">⌫</span></div>
+      <div class="kbrow"><span class="key rt">123</span><span class="key rt">🌐</span><span class="key space">空 格</span><span class="key rt">回车</span></div>
+    </div>
+  </div>
+</div><div class="homebar"></div></div>
+<div class="params">键高 42 · 键距 6 · 圆角 12 · 键底影 1px · 候选条 46 首选蓝底白字 18/600 · 顶栏工具 12px · kb 底 #D1D4DA 键白 · 底部安全区 26</div>
+</div>
+
+<!-- ═══════════ 13 键盘 · 拼音（暗）═══════════ -->
+<div class="board"><div class="tag">13 · 键盘 · 拼音（暗色）</div>
+<div class="phone dark" style="background:linear-gradient(#000 46%, #1D1D1F 46%)"><div class="notch"></div><div class="statusbar" style="color:#E8E8ED"><span>9:41</span><span>􀛨 􀙇</span></div>
+<div class="screen" style="justify-content:flex-end;color:#E8E8ED">
+  <div style="text-align:center;color:#48484C;font-size:13px;padding-bottom:14px">（宿主 App 聊天界面）</div>
+  <div class="kbwrap">
+    <div class="kb-topbar"><span class="kb-logo">妙语</span><span class="kb-tb"><span class="on">✨AI</span><span>📜短语</span><span>😊表情</span></span><span style="font-size:13px;color:#98989E">⌄</span></div>
+    <div class="candbar">
+      <span class="cand first">你好</span><span class="cand">拟好</span><span class="cand">泥嚎</span><span class="cand pinyin">ni hao</span>
+    </div>
+    <div class="kbarea">
+      <div class="kbrow"><span class="key">q</span><span class="key">w</span><span class="key">e</span><span class="key">r</span><span class="key">t</span><span class="key">y</span><span class="key">u</span><span class="key">i</span><span class="key">o</span><span class="key">p</span></div>
+      <div class="kbrow" style="padding:0 16px"><span class="key">a</span><span class="key">s</span><span class="key">d</span><span class="key">f</span><span class="key">g</span><span class="key">h</span><span class="key">j</span><span class="key">k</span><span class="key">l</span></div>
+      <div class="kbrow"><span class="key sp">⇧</span><span class="key">z</span><span class="key">x</span><span class="key">c</span><span class="key">v</span><span class="key">b</span><span class="key">n</span><span class="key">m</span><span class="key sp">⌫</span></div>
+      <div class="kbrow"><span class="key rt">123</span><span class="key rt">🌐</span><span class="key space">空 格</span><span class="key rt">回车</span></div>
+    </div>
+  </div>
+</div><div class="homebar" style="background:rgba(255,255,255,.5)"></div></div>
+<div class="params">暗色：kb 底 #1D1D1F · 键面 #6E6E73 / 功能键 #48484C · 键影加深 .55 · 候选文字 #E8E8ED · 首选仍蓝底（对比保留）</div>
+</div>
+
+<!-- ═══════════ 14 键盘 · T9 ═══════════ -->
+<div class="board"><div class="tag">14 · 键盘 · 九键 T9</div>
+<div class="phone" style="background:linear-gradient(#F7F8FA 40%, var(--kb-bg) 40%)"><div class="notch"></div><div class="statusbar"><span>9:41</span><span>􀛨 􀙇</span></div>
+<div class="screen" style="justify-content:flex-end">
+  <div style="text-align:center;color:#B9BDC5;font-size:13px;padding-bottom:12px">输入 6-4-2 → 候选「你好/泥号…」</div>
+  <div class="kbwrap">
+    <div class="kb-topbar"><span class="kb-logo">妙语 · 9键</span><span class="kb-tb"><span>拼音26</span><span class="on">T9</span><span>123</span></span><span style="font-size:13px;color:#6B6F78">⌄</span></div>
+    <div class="candbar">
+      <span class="cand first">你好</span><span class="cand">你号</span><span class="cand">泥号</span><span class="cand pinyin">ni hao (642)</span>
+    </div>
+    <div class="kbarea">
+      <div class="kbrow" style="max-width:220px;margin:0 auto 6px">
+        <span class="key" style="height:46px;flex-direction:column;max-width:66px"><b>1</b><span style="font-size:9px;color:var(--sub)">，。</span></span>
+        <span class="key" style="height:46px;flex-direction:column;max-width:66px"><b>2</b><span style="font-size:9px;color:var(--sub)">ABC</span></span>
+        <span class="key" style="height:46px;flex-direction:column;max-width:66px"><b>3</b><span style="font-size:9px;color:var(--sub)">DEF</span></span>
+      </div>
+      <div class="kbrow" style="max-width:220px;margin:0 auto 6px">
+        <span class="key" style="height:46px;flex-direction:column;max-width:66px"><b>4</b><span style="font-size:9px;color:var(--sub)">GHI</span></span>
+        <span class="key" style="height:46px;flex-direction:column;max-width:66px"><b>5</b><span style="font-size:9px;color:var(--sub)">JKL</span></span>
+        <span class="key" style="height:46px;flex-direction:column;max-width:66px"><b>6</b><span style="font-size:9px;color:var(--sub)">MNO</span></span>
+      </div>
+      <div class="kbrow" style="max-width:220px;margin:0 auto 6px">
+        <span class="key" style="height:46px;flex-direction:column;max-width:66px"><b>7</b><span style="font-size:9px;color:var(--sub)">PQRS</span></span>
+        <span class="key" style="height:46px;flex-direction:column;max-width:66px"><b>8</b><span style="font-size:9px;color:var(--sub)">TUV</span></span>
+        <span class="key" style="height:46px;flex-direction:column;max-width:66px"><b>9</b><span style="font-size:9px;color:var(--sub)">WXYZ</span></span>
+      </div>
+      <div class="kbrow" style="max-width:220px;margin:0 auto">
+        <span class="key" style="height:46px;max-width:66px;font-size:13px">⌫</span>
+        <span class="key" style="height:46px;max-width:66px;font-size:13px">分词</span>
+        <span class="key" style="height:46px;max-width:66px;font-size:13px">空格</span>
+      </div>
+    </div>
+  </div>
+</div><div class="homebar"></div></div>
+<div class="params">三列大键 46 高（单手可达）· 数字+字母双行标注 · 候选条显示 (642) 数字回显 · 分词键处理歧义切分</div>
+</div>
+
+<!-- ═══════════ 15 键盘 · AI 卡片面板 ═══════════ -->
+<div class="board"><div class="tag">15 · 键盘 · AI 卡片面板</div>
+<div class="phone" style="background:linear-gradient(#F7F8FA 30%, var(--kb-bg) 30%)"><div class="notch"></div><div class="statusbar"><span>9:41</span><span>􀛨 􀙇</span></div>
+<div class="screen" style="justify-content:flex-end">
+  <div class="kbwrap">
+    <div class="kb-topbar"><span class="kb-logo">妙语</span><span class="kb-tb"><span class="on">✨AI</span><span>📜短语</span><span>😊表情</span></span><span style="font-size:13px;color:#6B6F78">⌄</span></div>
+    <div style="background:#FBFBFD;padding:12px 12px 6px;max-height:300px;overflow:hidden">
+      <div style="font-size:11.5px;color:#8E8E93;margin-bottom:8px">识别输入框末条 · 人设：高情商妙语</div>
+      <div class="ai-card" style="border-left:3px solid #34C759;margin-bottom:8px">
+        <div style="font-size:11.5px;color:#248A3D;font-weight:600;margin-bottom:3px">润色 · 点击上屏</div>
+        好呀，你好好休息，想聊天随时找我～
+      </div>
+      <div class="ai-card" style="border-left:3px solid #007AFF;margin-bottom:8px">
+        <div style="font-size:11.5px;color:#007AFF;font-weight:600;margin-bottom:3px">策略① 给空间</div>
+        先不追问，把空间留给她，让她知道你在就好。
+      </div>
+      <div class="ai-card" style="border-left:3px solid #5856D6;margin-bottom:8px">
+        <div style="font-size:11.5px;color:#5856D6;font-weight:600;margin-bottom:3px">策略② 轻关心</div>
+        是最近太累了吗？需要我带杯奶茶放你门口吗
+      </div>
+      <div style="text-align:center;padding:2px 0 8px"><span style="font-size:12px;color:#0A84FF">↻ 重新生成</span><span style="font-size:12px;color:#8E8E93;margin-left:16px">⌫ 换回键盘</span></div>
+    </div>
+    <div class="kbarea" style="padding-top:4px">
+      <div class="kbrow"><span class="key sp" style="max-width:80px">✨ 润色本条</span><span class="key sp" style="max-width:80px">💬 三策略</span><span class="key sp" style="max-width:60px">⌫</span><span class="key space">空格</span></div>
+    </div>
+  </div>
+</div><div class="homebar"></div></div>
+<div class="params">AI 面板占键盘上半（≤300pt）· 结果卡左色条与 App 内策略色一致 · 点卡即替换输入框末条 · 底部保留一行操作键</div>
+</div>
+
+<!-- ═══════════ 16 键盘 · 短语/表情 + 无权限引导 ═══════════ -->
+<div class="board"><div class="tag">16 · 键盘 · 短语/表情面板 + 完全访问引导</div>
+<div class="phone" style="background:linear-gradient(#F7F8FA 34%, var(--kb-bg) 34%)"><div class="notch"></div><div class="statusbar"><span>9:41</span><span>􀛨 􀙇</span></div>
+<div class="screen" style="justify-content:flex-end">
+  <div class="kbwrap">
+    <div class="kb-topbar"><span class="kb-logo">妙语</span><span class="kb-tb"><span>✨AI</span><span class="on">📜短语</span><span>😊表情</span></span><span style="font-size:13px;color:#6B6F78">⌄</span></div>
+    <div style="background:#FBFBFD;padding:12px 12px 10px">
+      <div class="ggrid">
+        <span class="gcell">哈哈好的</span><span class="gcell">稍后回你</span><span class="gcell">可以呀</span>
+        <span class="gcell">多谢！</span><span class="gcell">晚安 🌙</span><span class="gcell">没毛病</span>
+        <span class="gcell">笑死 😂</span><span class="gcell">收到</span><span class="gcell">辛苦了</span>
+      </div>
+      <div style="font-size:11px;color:#8E8E93;text-align:center;margin-top:9px">在「妙语 App → 短语」管理 · 点击整句上屏</div>
+      <div style="margin-top:10px;background:#FFF3E0;border-radius:10px;padding:9px 11px;font-size:12px;line-height:1.55;color:#C93400">
+        ⚠️ 未开启完全访问：AI 面板与剪贴板暂不可用。<br>设置 → 键盘 → 妙语键盘 → 允许完全访问
+      </div>
+    </div>
+    <div class="kbarea" style="padding-top:4px">
+      <div class="kbrow"><span class="key sp" style="max-width:70px">abc</span><span class="key space">空 格</span><span class="key rt">回车</span></div>
+    </div>
+  </div>
+</div><div class="homebar"></div></div>
+<div class="params">短语 3 列网格 cell 圆角 12 · 无权限警示条 #FFF3E0/#C93400 圆角 10（App 端 GuideView 同款语义）</div>
+</div>
+
+</div>
+<div class="subnote" style="margin-top:30px">v1 待你反馈的点：① 改写页空态要不要展示示例 ② 策略三色（绿/蓝/橙）语义 ③ 键盘顶栏工具顺序 ④ T9 单手列宽 ⑤ 暗色键面对比度</div>
+</body>
+</html>

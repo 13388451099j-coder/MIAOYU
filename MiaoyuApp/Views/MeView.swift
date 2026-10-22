@@ -55,6 +55,11 @@ struct MeView: View {
                 } label: {
                     Label("截图识别改写", systemImage: "viewfinder")
                 }
+                NavigationLink {
+                    LiveView()
+                } label: {
+                    Label("直播模式（读屏免复制）", systemImage: "dot.radiowaves.left.and.right")
+                }
             }
 
             // 关于

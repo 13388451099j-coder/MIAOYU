@@ -17,9 +17,15 @@ enum AppGroup {
     }
 
     /// 键盘是否拥有完全访问权限。
-    /// 键盘侧在 `hasFullAccess` 变化时写入 "kb_full_access"；主 App 侧读该值用于安装引导展示，
-    /// 主 App 进程内并不真正持有键盘权限，读到的只是键盘上报的快照。
+    /// 键盘侧在 `hasFullAccess` 变化时调用 `reportKeyboardFullAccess(_:)` 写入；主 App 侧读该值
+    /// 用于安装引导展示，主 App 进程内并不真正持有键盘权限，读到的只是键盘上报的快照。
     static var keyboardHasFullAccess: Bool {
         defaults.bool(forKey: "kb_full_access")
+    }
+
+    /// 键盘侧上报完全访问状态（主 App「我的 → 键盘完全访问」据此显示）。
+    /// 之前只有读端没有写端，主 App 这项永远显示「未开启」——直播模式依赖完全访问，一并修掉。
+    static func reportKeyboardFullAccess(_ value: Bool) {
+        defaults.set(value, forKey: "kb_full_access")
     }
 }

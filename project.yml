@@ -19,6 +19,7 @@ targets:
       - path: MiaoyuApp
       - path: SharedKit
       - path: PinyinKit
+      - path: LiveKit
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.miaoyu.zuiti
@@ -30,6 +31,8 @@ targets:
     dependencies:
       - target: MiaoyuKeyboard
         embed: true
+      - target: MiaoyuLive
+        embed: true
   MiaoyuKeyboard:
     type: app-extension
     platform: iOS
@@ -37,6 +40,9 @@ targets:
       - path: MiaoyuKeyboard
       - path: SharedKit
       - path: PinyinKit
+      # 只挂快照与解析：键盘要读 App Group 里的直播结果，但不需要 Vision，
+      # 把 LiveOCREngine 拖进键盘只会白占内存。
+      - path: LiveKit/LiveSnapshot.swift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.miaoyu.zuiti.keyboard
@@ -44,12 +50,34 @@ targets:
         INFOPLIST_FILE: MiaoyuKeyboard/Info.plist
         CODE_SIGN_ENTITLEMENTS: MiaoyuKeyboard/MiaoyuKeyboard.entitlements
         TARGETED_DEVICE_FAMILY: "1"
+  # 直播模式：ReplayKit 广播上传扩展。录屏 → 本地 OCR（Vision）→ 快照写 App Group，
+  # 键盘与主 App 读快照出候选。三 target 必须同一 Team 签名并声明同一个 App Group。
+  # 只挂 LiveKit，别把 SharedKit / SwiftUI / 词库拖进这个 ~50MB 内存上限的进程。
+  MiaoyuLive:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: MiaoyuLive
+      - path: LiveKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.miaoyu.zuiti.live
+        PRODUCT_NAME: 妙语直播
+        # 显式钉住模块名：Info.plist 里 NSExtensionPrincipalClass 是
+        # $(PRODUCT_MODULE_NAME).LiveBroadcastHandler，若模块名由中文 PRODUCT_NAME 派生，
+        # 可能被 c99extidentifier 清成非法标识符导致扩展类找不到（启动即被系统杀掉）。
+        PRODUCT_MODULE_NAME: MiaoyuLive
+        INFOPLIST_FILE: MiaoyuLive/Info.plist
+        CODE_SIGN_ENTITLEMENTS: MiaoyuLive/MiaoyuLive.entitlements
+        TARGETED_DEVICE_FAMILY: "1"
+        SKIP_INSTALL: true
 schemes:
   MiaoyuApp:
     build:
       targets:
         MiaoyuApp: all
         MiaoyuKeyboard: [all]
+        MiaoyuLive: [all]
     run:
       config: Debug
     test:
