@@ -27,7 +27,12 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.miaoyu.zuiti
-        PRODUCT_NAME: 妙语
+        # PRODUCT_NAME 决定 .app 目录名与 CFBundleExecutable，必须是纯 ASCII。
+        # 之前写成中文「妙语」，打出来的包是 Payload/妙语.app、可执行文件也叫「妙语」；
+        # 用 Sideloadly / 爱思助手在 Windows 上重签时，zip 里的非 ASCII 文件名极易被
+        # 按 GBK 解错，导致重签后找不到可执行文件或整包资源（图标也在里面）丢失。
+        # 桌面显示名走 Info.plist 的 CFBundleDisplayName，仍然是「妙语」。
+        PRODUCT_NAME: Miaoyu
         INFOPLIST_FILE: MiaoyuApp/Info.plist
         CODE_SIGN_ENTITLEMENTS: MiaoyuApp/MiaoyuApp.entitlements
         TARGETED_DEVICE_FAMILY: "1"
@@ -61,7 +66,11 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.miaoyu.zuiti.keyboard
-        PRODUCT_NAME: 妙语键盘
+        # ASCII：appex 目录名会变成 PlugIns/MiaoyuKeyboardExt.appex。
+        # 中文 appex 目录名在 Windows 侧重签工具里会被解成乱码，扩展直接消失
+        # （设置 → 键盘 里就看不到「妙语键盘」，自然也没有「允许完全访问」开关）。
+        # 用户看到的名字来自 Info.plist 的 CFBundleDisplayName。
+        PRODUCT_NAME: MiaoyuKeyboardExt
         # 与 MiaoyuLive 同理：模块名若由中文 PRODUCT_NAME 派生，会被 c99extidentifier
         # 清成一串下划线，Info.plist 里 $(PRODUCT_MODULE_NAME).KeyboardViewController
         # 就指向一个系统找不到的类（键盘一弹出就被杀）。这里钉死成 ASCII。
@@ -81,7 +90,8 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.miaoyu.zuiti.live
-        PRODUCT_NAME: 妙语直播
+        # 同上：ASCII appex 目录名，中文名走 CFBundleDisplayName。
+        PRODUCT_NAME: MiaoyuLiveExt
         # 显式钉住模块名：Info.plist 里 NSExtensionPrincipalClass 是
         # $(PRODUCT_MODULE_NAME).LiveBroadcastHandler，若模块名由中文 PRODUCT_NAME 派生，
         # 可能被 c99extidentifier 清成非法标识符导致扩展类找不到（启动即被系统杀掉）。

@@ -17,6 +17,8 @@
 | 打包时两个同名 `lexicon.json` 撞车 | 键盘精简词库和完整词库同名，原样平铺到同一个 bundle 根目录 | E6 | 已修（改 project.yml 排除） |
 | 键盘进程可能起不来 | 中文 `PRODUCT_NAME` 派生的模块名会被清成非法标识符，`NSExtensionPrincipalClass` 找不到类 | E7 | 已修（钉死 `PRODUCT_MODULE_NAME`） |
 | 图标带 alpha、边角半透明 | 图标用 32bppArgb 位图生成 + GDI+ 缩放采样到画布外，边缘 alpha 掉到 222 | E8 | 已修（改 24bppRgb，实测 11 张全 alpha=255） |
+| 重签后仍可能白图标 / 键盘在设置里不出现 | `PRODUCT_NAME` 是中文，包内是 `Payload/妙语.app`、`妙语键盘.appex`，Windows 侧重签工具按 GBK 解 zip 会解成乱码目录名 | E9 | 已修（三个 target 的 `PRODUCT_NAME` 全改 ASCII） |
+| 键盘 AI 面板一直说「尚未配置 API Key」 | 免费签名剥离 `keychain-access-groups`，主 App 与键盘各用各的默认钥匙串组，扩展读不到宿主存的 Key | E10 | 已修（新增配置串搬运通道） |
 
 ## E1 键盘卡住：词库在主线程解码
 
@@ -118,6 +120,44 @@
 - 实测（重新生成后）：11 张 PNG 全部 `colorType=2`（RGB，无 alpha），采样最小 alpha=255，尺寸与
   `Contents.json` 一一对应。
 
+## E9 中文 `PRODUCT_NAME`：自签重签时最容易翻车的一处
+
+- `project.yml` 里三个 target 的 `PRODUCT_NAME` 原来都是中文（`妙语` / `妙语键盘` / `妙语直播`）。
+  `PRODUCT_NAME` 同时决定 **bundle 目录名**和 `CFBundleExecutable`，所以产物是：
+  ```
+  Payload/妙语.app/妙语
+  Payload/妙语.app/PlugIns/妙语键盘.appex/妙语键盘
+  Payload/妙语.app/PlugIns/妙语直播.appex/妙语直播
+  ```
+- 这类包在 Mac 上能装，但用 Windows 侧的自签工具（Sideloadly / 爱思助手 / iTools）重签时，
+  zip 里的非 ASCII 文件名一旦按 GBK 解码就会变成乱码目录，工具找不到可执行文件、
+  或干脆整包资源没解出来——**表现就是装上没有图标、或者键盘扩展在设置里根本不出现**。
+- Xcode 自己也不推荐：Apple 的 target 命名约定一直是 ASCII 标识符 + 本地化的 `CFBundleDisplayName`。
+- 修复：三个 `PRODUCT_NAME` 改成 `Miaoyu` / `MiaoyuKeyboardExt` / `MiaoyuLiveExt`。
+  用户看到的名称来自各自的 `Info.plist` 里的 `CFBundleDisplayName`（仍是「妙语」「妙语键盘」「妙语直播」），
+  桌面图标下面的字没变。
+- 顺带的好处：`Verify IPA payload` 里 `find Payload -maxdepth 1 -name '*.app'` 不再依赖中文匹配。
+
+## E10 键盘读不到主 App 的 API Key：免费签名的第二个硬限制
+
+- `keychain-access-groups` 同样是**需要付费开发者账号的 capability**。免费 Apple ID 的描述文件不含它，
+  重签工具会把这条 entitlement 剥掉；两个 target 各自退回默认组
+  （`<AppIdentifierPrefix>.com.miaoyu.zuiti` 与 `…zuiti.keyboard`），互相读不到。
+- 于是：主 App「模型设置」显示「已配置」、连接测试也通；切到键盘点 ✨AI，仍然只看到
+  「尚未配置 API Key」。用户视角就是「明明配了却说没配」。
+- 修复（不依赖任何付费能力）：
+  - `SharedKit/ConfigPortable.swift`：把「服务商 + 模型 + 接口地址 + Key」编码成
+    `miaoyu-cfg:v1:<base64>` 一条配置串；
+  - 主 App `模型设置 → 服务商详情` 新增「跨进程同步 → 复制配置串（给键盘用）」；
+  - 键盘 ✨AI 面板在「有完全访问但没 Key」时显示配置面板：可以直接「从剪贴板导入配置」，
+    也可以手动粘贴那条串再保存；
+  - 落地写的是**键盘进程自己**的 Keychain + UserDefaults，所以之后键盘内自洽；
+    模型 / baseURL 也一并带过去，不需要再进主 App。
+- `KeychainStore.set` 现在返回写入是否成功，`LlmProviderStore.setUserKey` 一并透传；
+  主 App 的 Key 输入框下方会在被系统拒绝时显式报「写入钥匙串被系统拒绝」，不再静默失败。
+- 局限：主 App 后来改了 Key / 模型，需要在主 App 重新复制一次配置串、键盘再导入一次。
+  这是免费签名下的必然代价（没有共享容器）。
+
 ## 这一轮补的可见性改动
 
 - 「改写」页顶部新增一条完全访问提示条：没检测到权限时显示「去开启」，点了直接跳系统设置
@@ -145,14 +185,21 @@
    （App 里两条入口：「改写」页顶部提示条的「去开启」、「我的 → 键盘安装引导 → 打开 设置 → 通用 → 键盘」）
 3. 随便找个输入框切到妙语键盘，连打 `nihao`：候选应立刻出现「你好」等，**键盘不应卡住**；
    首次可能先闪一下「词库加载中…」再出候选。
-4. 「我的」页：付费账号签名时「键盘完全访问」应变「已开启」；免费自签显示
+4. 键盘点 ✨AI：有完全访问时会先看到「键盘还没拿到 API Key」。
+   先去主 App「我的 → 模型设置 → 选中服务商 → 跨进程同步 → 复制配置串」，
+   回来点「从剪贴板导入配置」，应提示「导入成功」，随后 ✨AI 直接可用。
+   （付费账号签名、App Groups 生效时不会走到这一步，键盘能直接读到主 App 的 Key。）
+5. 「我的」页：付费账号签名时「键盘完全访问」应变「已开启」；免费自签显示
    「无法检测 / 共享容器不可用（自签限制）」，这不是开关没点。
-5. 直播模式：真机才能测（模拟器没有系统广播面板）。付费账号下按 `LIVE_MODE.md` 的步骤走。
-6. GitHub Actions 那一步 `Verify IPA payload` 必须是绿的：它替你在云端检查了图标、键盘扩展、
+6. 直播模式：真机才能测（模拟器没有系统广播面板）。付费账号下按 `LIVE_MODE.md` 的步骤走。
+7. GitHub Actions 那一步 `Verify IPA payload` 必须是绿的：它替你在云端检查了图标、键盘扩展、
    `RequestsOpenAccess` 和键盘词库这四样东西，红了就照报错改，不用装到手机上才发现。
 
 ## 还没做 / 未验证
 
-- 以上全部是静态修改，**没有在 Xcode 里编译过，也没有真机验证**（Windows 环境）。CI 构建若报错，
+- 全部是静态修改，**没有在 Xcode 里编译过，也没有真机验证**（Windows 环境）。CI 构建若报错，
   优先看 `project.yml` 的 target membership 与新增资源路径。
 - 键盘内存水位仍建议在真机上用 Xcode Memory gauge 看一眼（精简词库后应在安全范围内）。
+- `PRODUCT_NAME` 改 ASCII 后，**旧包必须先卸载再装新包**：bundle id 没变，但 `.app` 目录名变了，
+  某些签名工具在覆盖安装时会残留旧的 `Payload/妙语.app`，清一次更稳。
+- 配置串搬运只覆盖「主 App → 键盘」一个方向；键盘侧改不了服务商/模型，也不回写主 App。

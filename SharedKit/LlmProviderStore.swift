@@ -36,13 +36,16 @@ final class LlmProviderStore {
     }
 
     /// 写入用户 Key：trim 后落 Keychain；空串即删除（清空语义）
-    func setUserKey(_ key: String, for id: LlmProviderId) {
+    /// - Returns: 是否真的写进了本进程钥匙串（删除也算成功）。false 时上层必须提示用户，
+    ///   自签剥离 keychain-access-groups 后会走到这个分支。
+    @discardableResult
+    func setUserKey(_ key: String, for id: LlmProviderId) -> Bool {
         let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
             KeychainStore.delete(Self.keyAccount(id))
-        } else {
-            KeychainStore.set(trimmed, account: Self.keyAccount(id))
+            return true
         }
+        return KeychainStore.set(trimmed, account: Self.keyAccount(id))
     }
 
     /// 实际生效 Key：iOS 端不预置任何内置 Key，即用户 Key，无则 ""

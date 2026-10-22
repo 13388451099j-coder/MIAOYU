@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import UIKit
 
 /// AI 卡片面板：三种输入来源共用一套候选展示。
 ///
@@ -32,6 +33,18 @@ struct AiCardPanelView: View {
 
     @State private var phase: Phase = .idle
 
+    /// 本进程（键盘扩展）是否已拿到可用的 API Key。
+    /// 自签安装没有 App Groups，主 App 存进它自己钥匙串的 Key 在键盘这边读不到，
+    /// 所以这里必须单独判断，并给用户一条搬运配置的路径。
+    /// 初值给 false、在 onAppear 里读：View 的 init 会在每次 body 重建时执行，
+    /// 把钥匙串读取放在属性默认值里等于每次重建都读一遍 Keychain。
+    @State private var hasKey: Bool = false
+
+    /// 手动粘贴配置串的输入框内容
+    @State private var configToken: String = ""
+    /// 配置搬运的提示语（成功 / 令牌不合法 / 剪贴板为空）
+    @State private var configMessage: String?
+
     /// 最新一次读到的直播快照（每 2 秒刷新；轮询本身很轻，快照只有几 KB）
     @State private var snapshot: LiveScreenSnapshot?
 
@@ -44,16 +57,21 @@ struct AiCardPanelView: View {
                 EmptyView()
             }
             Group {
-                if context.hasFullAccess {
-                    content
-                } else {
+                if !context.hasFullAccess {
                     fullAccessGuide
+                } else if !hasKey {
+                    configPanel
+                } else {
+                    content
                 }
             }
             .frame(maxHeight: .infinity)
         }
         .background(KeyboardTheme.background)
-        .onAppear { snapshot = LiveScreenStore.load() }
+        .onAppear {
+            hasKey = LlmProviderStore.shared.hasUsableKey()
+            snapshot = LiveScreenStore.load()
+        }
         .onReceive(liveTicker) { _ in
             guard context.hasFullAccess else { return }
             snapshot = LiveScreenStore.load()
@@ -73,8 +91,100 @@ struct AiCardPanelView: View {
             Text("设置 → 键盘 → 妙语 → 允许完全访问")
                 .font(.system(size: 13))
                 .foregroundStyle(KeyboardTheme.secondaryForeground)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 12)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    // MARK: - 未配置 API Key：键盘侧自行搬运配置
+
+    /// 自签安装时 App Groups 不可用，主 App 的 Key 过不来。
+    /// 这里给两条路：直接从剪贴板导入，或手动粘贴那条配置串。
+    private var configPanel: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 6) {
+                    Image(systemName: "key.horizontal")
+                        .font(.system(size: 12))
+                    Text("键盘还没拿到 API Key")
+                        .font(.system(size: 13, weight: .semibold))
+                }
+                .foregroundStyle(KeyboardTheme.foreground)
+
+                Text("① 妙语 App › 我的 › 模型设置 › 选服务商 › 点「复制配置串」\n② 回到这里导入，只写进键盘自己的钥匙串")
+                    .font(.system(size: 11))
+                    .foregroundStyle(KeyboardTheme.secondaryForeground)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Button {
+                    importFromPasteboard()
+                } label: {
+                    Text("从剪贴板导入配置")
+                        .font(.system(size: 13, weight: .medium))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .fill(KeyboardTheme.panelBackground)
+                        )
+                        .foregroundStyle(KeyboardTheme.accent)
+                }
+                .buttonStyle(.plain)
+
+                HStack(spacing: 6) {
+                    TextField("或粘贴配置串", text: $configToken)
+                        .font(.system(size: 11))
+                        .textFieldStyle(.plain)
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 5)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .fill(KeyboardTheme.panelBackground)
+                        )
+                    Button("保存") {
+                        applyConfig(configToken)
+                    }
+                    .font(.system(size: 12))
+                    .buttonStyle(.borderless)
+                }
+
+                if let configMessage {
+                    Text(configMessage)
+                        .font(.system(size: 11))
+                        .foregroundStyle(KeyboardTheme.secondaryForeground)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+        }
+    }
+
+    /// 读剪贴板并导入。iOS 16 起读剪贴板会弹系统「允许粘贴」，用户在弹窗点允许即可。
+    private func importFromPasteboard() {
+        guard let text = UIPasteboard.general.string, !text.isEmpty else {
+            configMessage = "剪贴板是空的：先在主 App 点「复制配置串」"
+            return
+        }
+        applyConfig(text)
+    }
+
+    /// 落地配置：解析失败（不是妙语令牌）/ 写入失败（钥匙串被拒）/ 成功，三态各自提示
+    private func applyConfig(_ token: String) {
+        switch ConfigPortable.apply(token: token) {
+        case .some(true):
+            hasKey = LlmProviderStore.shared.hasUsableKey()
+            configToken = ""
+            configMessage = "导入成功"
+            phase = .idle
+        case .some(false):
+            configMessage = "配置已读到，但写不进钥匙串（签名限制），请用付费开发者账号签名"
+        case .none:
+            configMessage = "这段文本不是妙语配置串，检查是否复制完整"
+        }
     }
 
     // MARK: - 有权限内容

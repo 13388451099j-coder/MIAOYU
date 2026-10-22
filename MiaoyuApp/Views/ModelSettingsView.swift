@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// 模型设置：服务商列表（点击行激活，尾部箭头进详情）
 struct ModelSettingsView: View {
@@ -78,6 +79,10 @@ struct ProviderDetailView: View {
     @State private var isTesting = false
     @State private var testMessage: String?
     @State private var testSucceeded = false
+    /// 钥匙串写入失败标记（自签剥离 keychain-access-groups 时会出现）
+    @State private var keySaveFailed = false
+    /// 「复制配置串」的结果提示
+    @State private var copyMessage: String?
 
     var body: some View {
         Form {
@@ -85,10 +90,12 @@ struct ProviderDetailView: View {
             Section {
                 SecureField("API Key（仅存本机钥匙串）", text: $apiKey)
                     .onChange(of: apiKey) { newValue in
-                        // trim 后保存；空串即删除
-                        LlmProviderStore.shared.setUserKey(newValue, for: provider.id)
+                        // trim 后保存；空串即删除。写入失败要显式说，不能只留一个「未配置」
+                        let saved = LlmProviderStore.shared.setUserKey(newValue, for: provider.id)
                         keyConfigured = !LlmProviderStore.shared
                             .userKey(for: provider.id).isEmpty
+                        keySaveFailed = !saved && !newValue
+                            .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                     }
                 HStack(spacing: 6) {
                     Circle()
@@ -97,6 +104,11 @@ struct ProviderDetailView: View {
                     Text(keyConfigured ? "已配置" : "未配置")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
+                }
+                if keySaveFailed {
+                    Text("写入钥匙串被系统拒绝：当前安装方式（自签）没有钥匙串权限。请改用付费开发者账号签名，或按下面「跨进程同步」把配置搬到键盘里直接使用。")
+                        .font(.footnote)
+                        .foregroundStyle(.orange)
                 }
             } header: {
                 Text("API Key")
@@ -132,6 +144,32 @@ struct ProviderDetailView: View {
                     .foregroundStyle(.secondary)
             } header: {
                 Text("接口地址")
+            }
+
+            // 跨进程同步：自签安装没有 App Groups 时，键盘读不到主 App 的 Key
+            Section {
+                Button {
+                    let token = ConfigPortable.makeToken(provider: provider.id)
+                    guard !token.isEmpty else {
+                        copyMessage = "当前服务商还没填 Key，先在上面填写"
+                        return
+                    }
+                    UIPasteboard.general.string = token
+                    copyMessage = "已复制：\(token.count) 个字符。去键盘 ✨AI 面板点「从剪贴板导入配置」，然后清空剪贴板。"
+                } label: {
+                    Label("复制配置串（给键盘用）", systemImage: "doc.on.clipboard")
+                }
+                .disabled(!keyConfigured)
+
+                if let copyMessage {
+                    Text(copyMessage)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            } header: {
+                Text("跨进程同步")
+            } footer: {
+                Text("用普通 Apple ID 自签安装时，免费证书不支持 App Groups，键盘扩展读不到这里保存的 Key——键盘 AI 面板会一直显示未配置。复制这条配置串，在键盘 ✨AI 面板里导入一次即可（只写进键盘自己的钥匙串）。")
             }
 
             // 连接测试
