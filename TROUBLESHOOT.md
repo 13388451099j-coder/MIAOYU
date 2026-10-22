@@ -3,6 +3,19 @@
 用户反馈：键盘能装上，但主页面卡住；设置里没有「允许完全访问」按钮；装完 bug 很多、不能正常用；
 重装后 App 没有图标。本文逐条给出根因与修复，全部是静态排查结论（Windows 上无 Xcode，未跑真机验证）。
 
+## 你装的那一版（run #7 / commit 1bb21ae）实际缺什么
+
+三条症状都能在仓库里直接取到证，不是猜测（`git show 1bb21ae:<path>` 可复核）：
+
+| 症状 | 该版本的实际状态 | 取证 |
+|---|---|---|
+| 没有图标 | 仓库里完全没有 `MiaoyuApp/Assets.xcassets`，也没有 `tools/make-app-icon.ps1`；`project.yml` 里没有 `ASSETCATALOG_COMPILER_APPICON_NAME`。包内不存在任何图标资源，`CFBundleIconName=AppIcon` 指向空 | `git ls-tree -r 1bb21ae` 无匹配；`git show 1bb21ae:project.yml` 无 `ASSETCATALOG` 行 |
+| 设置里没有「允许完全访问」 | `MiaoyuKeyboard/Info.plist` 把 `RequestsOpenAccess` 直接写在 `NSExtension` 下，缺 `NSExtensionAttributes` 这一层，系统按规范读不到就直接忽略 | `git show 1bb21ae:MiaoyuKeyboard/Info.plist` 中 `RequestsOpenAccess` 的父节点是 `NSExtension` |
+| 键盘一打就卡 | `PinyinKit/LexiconStore.swift` 只有同步 `load()`，`PinyinEngine` 在按键触发的 `rebuild()` 里调用它 → 主线程解 4.8MB / 12 万条 JSON，再在主线程建 12 万条索引 | `git show 1bb21ae:PinyinKit/LexiconStore.swift` 无 `loadAsync`，只有 `JSONDecoder().decode` 在 `load()` 内 |
+
+三处都在 `f1149cf`（run #8）修掉，且 run #8 的 `Verify IPA payload` 自检已绿。
+`9c5a106`（run #9）在此基础上补了两件事：包名改 ASCII（E9）、键盘侧配置搬运（E10）。
+
 ## 一句话结论
 
 五处问题，四处是本工程的配置/实现缺陷（已改），一处是**自签免费证书的系统限制**（改不了，只能换签名方式）：

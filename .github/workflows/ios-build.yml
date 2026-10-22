@@ -4,6 +4,11 @@ name: iOS Build
 on:
   push:
     branches: [main, master]
+    # 只改文档 / 设计稿不重新出包：以前每改一行 MD 都要白跑一次 macOS 构建
+    paths-ignore:
+      - '**.md'
+      - 'design_drafts/**'
+      - 'tools/lexicon-src/**'
   workflow_dispatch:
 
 jobs:
@@ -119,6 +124,16 @@ jobs:
           APP=$(find Payload -maxdepth 1 -name '*.app' | head -n 1)
           echo "APP=$APP"
 
+          # 包名必须是纯 ASCII：Windows 侧自签工具解中文目录名会乱码，
+          # 轻则丢图标、重则整个 appex 消失（设置里看不到键盘）。
+          APP_NAME=$(basename "$APP" .app)
+          if LC_ALL=C printf '%s' "$APP_NAME" | grep -q '[^A-Za-z0-9._-]'; then
+            echo "::error::主 App 目录名含非 ASCII：$APP_NAME（改 project.yml 的 PRODUCT_NAME）"
+            fail=1
+          else
+            echo "OK  主 App 目录名 $APP_NAME 是 ASCII"
+          fi
+
           if [ -f "$APP/Assets.car" ]; then
             echo "OK  Assets.car 存在（图标已编译）"
           else
@@ -134,7 +149,12 @@ jobs:
           for appex in "$APP"/PlugIns/*.appex; do
             [ -d "$appex" ] || continue
             point=$(/usr/libexec/PlistBuddy -c 'Print :NSExtension:NSExtensionPointIdentifier' "$appex/Info.plist" 2>/dev/null || true)
-            echo "appex: $(basename "$appex") -> ${point:-<未知>}"
+            AX_NAME=$(basename "$appex" .appex)
+            echo "appex: $AX_NAME -> ${point:-<未知>}"
+            if LC_ALL=C printf '%s' "$AX_NAME" | grep -q '[^A-Za-z0-9._-]'; then
+              echo "::error::appex 目录名含非 ASCII：$AX_NAME（改 project.yml 的 PRODUCT_NAME）"
+              fail=1
+            fi
             if [ "$point" = "com.apple.keyboard-service" ]; then KB="$appex"; fi
           done
 
