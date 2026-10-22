@@ -45,6 +45,13 @@ struct AiCardPanelView: View {
     /// 配置搬运的提示语（成功 / 令牌不合法 / 剪贴板为空）
     @State private var configMessage: String?
 
+    /// 当前从 textDocumentProxy 读到的输入框末尾内容（每次进面板 / 每 2 秒刷新）。
+    /// 用户点完 AI 最想知道的就是「你到底读到了什么」，所以直接显示出来，不靠猜。
+    @State private var inputPreview: String = ""
+
+    /// App Group 是否可用。免费签名为 false，直播快照的跨进程通道直接断掉。
+    @State private var sharedContainerOK: Bool = AppGroup.isSharedContainerAvailable
+
     /// 最新一次读到的直播快照（每 2 秒刷新；轮询本身很轻，快照只有几 KB）
     @State private var snapshot: LiveScreenSnapshot?
 
@@ -70,12 +77,26 @@ struct AiCardPanelView: View {
         .background(KeyboardTheme.background)
         .onAppear {
             hasKey = LlmProviderStore.shared.hasUsableKey()
+            sharedContainerOK = AppGroup.isSharedContainerAvailable
+            refreshInputPreview()
             snapshot = LiveScreenStore.load()
         }
         .onReceive(liveTicker) { _ in
             guard context.hasFullAccess else { return }
+            refreshInputPreview()
             snapshot = LiveScreenStore.load()
         }
+    }
+
+    /// 刷新「读到什么」：取光标前文档的最后一段非空行，最多 60 字。
+    /// 空串就是真的没读到——UI 会直说「读到 0 个字」，而不是让用户以为是 AI 没响应。
+    private func refreshInputPreview() {
+        let text = context.documentContextBeforeInput() ?? ""
+        let lastLine = text
+            .split(whereSeparator: { $0 == "\n" || $0 == "\r" })
+            .last
+            .map(String.init) ?? ""
+        inputPreview = String(lastLine.suffix(60))
     }
 
     // MARK: - 无完全访问权限引导
@@ -257,6 +278,16 @@ struct AiCardPanelView: View {
                     .foregroundStyle(KeyboardTheme.secondaryForeground)
             }
 
+            if !sharedContainerOK {
+                // 免费签名下这条链路是断的：广播扩展把 OCR 结果写进 App Group，
+                // 键盘读不到同一个容器。不写清楚的话，用户会一直以为是「直播没开好」。
+                Text("当前签名没有 App Groups：直播识别结果传不到键盘，开着直播也不会出现内容。要真用直播需要付费开发者账号签名。")
+                    .font(.system(size: 10))
+                    .foregroundStyle(Color.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
             if targets.isEmpty {
                 Text(listening
                      ? "还没读到对方的新消息：回聊天界面停一两秒再回来"
@@ -322,9 +353,18 @@ struct AiCardPanelView: View {
 
     private var entryArea: some View {
         VStack(spacing: 8) {
-            Text("针对输入框里已打的那句话")
-                .font(.system(size: 11))
-                .foregroundStyle(KeyboardTheme.secondaryForeground)
+            if inputPreview.isEmpty {
+                Text("输入框里还没读到文字（0 个字）")
+                    .font(.system(size: 11))
+                    .foregroundStyle(KeyboardTheme.secondaryForeground)
+            } else {
+                Text("读到：「\(inputPreview)」")
+                    .font(.system(size: 11))
+                    .foregroundStyle(KeyboardTheme.accent)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
 
             HStack(spacing: 10) {
                 entryButton("润色本条", icon: "wand.and.stars") {

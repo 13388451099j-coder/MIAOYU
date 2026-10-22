@@ -72,6 +72,8 @@ final class KeyboardContext: ObservableObject {
             self.syncFromEngine()
         }
         engine.prepare()
+        // 触觉引擎提前预热，避免第一次按键的 20~40ms 延迟
+        haptic.prepare()
     }
 
     /// T9 当前数字串（键盘侧自行维护，映射成字母路径后喂给 engine）
@@ -79,39 +81,43 @@ final class KeyboardContext: ObservableObject {
 
     // MARK: - 上屏通道（由 KeyboardViewController 注入）
 
-    private var performInsert: (String) -> Void = { _ in }
-    private var performDelete: (Int) -> Void = { _ in }
-    private var readDocumentBeforeInput: () -> String? = { nil }
+    /// 当前输入代理（**强引用**）。
+    /// 旧实现把 `textDocumentProxy` 用 `[weak proxy]` 捕获进闭包。系统在焦点切换、
+    /// 宿主 App 切换、键盘重建时会换掉甚至释放旧代理对象，闭包随后静默变成 no-op：
+    /// 候选条正常出字、按键也有按压反馈，但宿主输入框里一个字符都不进。
+    /// 现在由本对象持有最新一份，VC 每次 `textWillChange` 都会重新注入。
+    private var currentProxy: UITextDocumentProxy?
+
+    /// 输入通道是否就绪（VC 是否注入过可用的 proxy）。
+    /// 候选条会读它：为 false 时直接告诉用户「输入通道未就绪」，
+    /// 而不是让用户对着一个打不出字的键盘猜。
+    @Published private(set) var proxyReady: Bool = false
+
     private var performSwitchInputMode: () -> Void = { }
     private var performDismiss: () -> Void = { }
+
+    /// 按键触觉反馈。除了手感，它同时是一个可观测的诊断信号：
+    /// 有震动但字没进输入框 = 触摸正常、上屏通道有问题；
+    /// 连震动都没有 = 触摸事件根本没到 SwiftUI 这一层（宿主 view 尺寸/坐标系问题）。
+    private let haptic = UIImpactFeedbackGenerator(style: .light)
 
     /// 由 VC 注入代理通道。
     ///
     /// - Parameters:
-    ///   - proxy: VC 的 textDocumentProxy（闭包内弱引用捕获，避免延长代理生命周期）；
+    ///   - proxy: VC 的 textDocumentProxy（本对象强引用持有，不再用闭包弱捕获）；
     ///   - fullAccess: VC.hasFullAccess（是否拥有完全访问权限）；
     ///   - needsSwitchKey: VC.needsInputModeSwitchKey（是否需要地球键）；
     ///   - switcher: 切下一个系统输入法，VC 注入 `advanceToNextInputMode()`；
     ///   - dismiss: 收起键盘，VC 注入 `dismissKeyboard()`。
     ///
-    /// VC 在 viewDidLoad / viewDidAppear / textWillChange 重复调用以刷新（proxy 可能随焦点变化）。
+    /// VC 在 viewDidLoad / viewWillAppear / viewDidAppear / textWillChange 重复调用以刷新。
     func install(proxy: UITextDocumentProxy,
                  fullAccess: Bool,
                  needsSwitchKey: Bool,
                  switcher: @escaping () -> Void,
                  dismiss: @escaping () -> Void) {
-        performInsert = { [weak proxy] text in
-            proxy?.insertText(text)
-        }
-        performDelete = { [weak proxy] count in
-            guard let proxy = proxy else { return }
-            // UITextDocumentProxy 只暴露单字符 deleteBackward()，按次数循环；上限防御
-            let n = min(max(count, 0), 1000)
-            for _ in 0..<n { proxy.deleteBackward() }
-        }
-        readDocumentBeforeInput = { [weak proxy] in
-            proxy?.documentContextBeforeInput
-        }
+        currentProxy = proxy
+        proxyReady = true
         performSwitchInputMode = switcher
         performDismiss = dismiss
         hasFullAccess = fullAccess
@@ -143,6 +149,7 @@ final class KeyboardContext: ObservableObject {
 
     /// 字母键：拼音/T9 模式进引擎组词；英文模式按 shift 状态直接上屏。
     func tap(letter: Character) {
+        keyFeedback()
         switch mode {
         case .pinyin, .t9:
             engine.append(letter: letter)
@@ -160,34 +167,37 @@ final class KeyboardContext: ObservableObject {
     /// 无字母映射的数字（如 1）由视图层拦截，不会走到这里。
     func tapDigit(_ digit: Character) {
         guard mode == .t9, !T9Mapper.letters(for: digit).isEmpty else { return }
+        keyFeedback()
         t9Digits.append(digit)
         rebuildT9Engine()
     }
 
     /// 退格：有组合删组合（拼音删字母 / T9 删数字），无组合删除正文一个字符。
     func tapBackspace() {
+        keyFeedback()
         switch mode {
         case .pinyin:
             if !engine.rawInput.isEmpty {
                 engine.backspace()
                 syncFromEngine()
             } else {
-                performDelete(1)
+                deleteBackward(1)
             }
         case .t9:
             if !t9Digits.isEmpty {
                 t9Digits.removeLast()
                 rebuildT9Engine()
             } else {
-                performDelete(1)
+                deleteBackward(1)
             }
         default:
-            performDelete(1)
+            deleteBackward(1)
         }
     }
 
     /// 空格：有组合时上屏第一候选（无候选则原样上屏字母串），无组合插入空格。
     func tapSpace() {
+        keyFeedback()
         if !engine.rawInput.isEmpty {
             if let first = engine.candidates.first {
                 selectCandidate(first)
@@ -201,6 +211,7 @@ final class KeyboardContext: ObservableObject {
 
     /// 回车：有组合时等同空格（先上屏组合避免悬空），无组合插入换行。
     func tapReturn() {
+        keyFeedback()
         if !engine.rawInput.isEmpty {
             tapSpace()
         } else {
@@ -272,31 +283,59 @@ final class KeyboardContext: ObservableObject {
 
     /// 直接上屏文本：符号、英文、短语、颜文字、AI 结果共用的唯一通道（契约方法名）。
     func sendToProxy(text: String) {
-        performInsert(text)
+        guard let proxy = currentProxy else {
+            // 只有一个解释：VC 的 injectContext 没跑过，或系统还没给 proxy。
+            // 把 proxyReady 置 false，候选条会直接把这句话显示出来。
+            proxyReady = false
+            return
+        }
+        proxy.insertText(text)
+    }
+
+    /// 删除光标前 count 个字符（UITextDocumentProxy 只暴露单字符 deleteBackward，按次循环）。
+    private func deleteBackward(_ count: Int) {
+        guard let proxy = currentProxy else {
+            proxyReady = false
+            return
+        }
+        let n = min(max(count, 0), 1000)
+        for _ in 0..<n { proxy.deleteBackward() }
     }
 
     /// 删除光标前 count 个字符再插入 text（AI「润色本条」替换尾部段落用）。
     func replaceChars(_ count: Int, with text: String) {
-        performDelete(count)
-        performInsert(text)
+        guard let proxy = currentProxy else {
+            proxyReady = false
+            return
+        }
+        let n = min(max(count, 0), 1000)
+        for _ in 0..<n { proxy.deleteBackward() }
+        proxy.insertText(text)
     }
 
     /// 光标前文档内容（AI 面板取最近一条消息用）。
     func documentContextBeforeInput() -> String? {
-        readDocumentBeforeInput()
+        currentProxy?.documentContextBeforeInput
     }
 
     /// 地球键：切到下一个系统输入法（VC 注入 advanceToNextInputMode）。
     func switchToNextKeyboard() {
+        keyFeedback()
         performSwitchInputMode()
     }
 
     /// 收起键盘（VC 注入 dismissKeyboard）。
     func dismissKeyboard() {
+        keyFeedback()
         performDismiss()
     }
 
     // MARK: - 内部同步
+
+    /// 按键触觉反馈（见属性注释：它同时是判断「触摸有没有到」的诊断信号）
+    private func keyFeedback() {
+        haptic.impactOccurred()
+    }
 
     /// 每次引擎操作后，把最新值同步进 @Published（SwiftUI 状态驱动候选条）。
     private func syncFromEngine() {

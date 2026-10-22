@@ -8,15 +8,30 @@ struct CandidateBarView: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            // 组合音节展示；空组合显示占位提示
-            Text(context.syllableDisplay.isEmpty ? "拼音" : context.syllableDisplay)
-                .font(.system(size: 12, design: .rounded))
-                .foregroundStyle(KeyboardTheme.secondaryForeground)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-                .frame(maxWidth: 88, alignment: .leading)
+            // 组合音节展示；空组合显示占位提示。
+            // proxyReady 为 false 时优先显示诊断：这说明 VC 还没把 textDocumentProxy 注入进来，
+            // 此时任何按键都不会进宿主输入框，用户看到「打不出字」就无从判断。
+            if !context.proxyReady {
+                Text("通道未就绪")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Color.red)
+                    .lineLimit(1)
+                    .frame(maxWidth: 88, alignment: .leading)
+            } else {
+                Text(context.syllableDisplay.isEmpty ? "拼音" : context.syllableDisplay)
+                    .font(.system(size: 12, design: .rounded))
+                    .foregroundStyle(KeyboardTheme.secondaryForeground)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .frame(maxWidth: 88, alignment: .leading)
+            }
 
-            if context.candidates.isEmpty {
+            if !context.proxyReady {
+                Text("输入通道未就绪，请切到别的键盘再切回来")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color.red.opacity(0.85))
+                Spacer()
+            } else if context.candidates.isEmpty {
                 if context.rawInput.isEmpty {
                     // 无组合：占位提示
                     Text("输入拼音，候选词显示在这里")
